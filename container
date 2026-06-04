@@ -1,0 +1,357 @@
+#!/bin/bash
+
+#set -e
+#set -x
+
+ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+_GID=$(id -g)
+_UID=$(id -u)
+_UNAME=$(id -un)
+HOST_GIT_COMMIT=$(git -C "$ROOT" rev-parse --verify HEAD 2>/dev/null || true)
+
+USAGE="$0 [command: build|start|stop|restart|shell|cmd|rm] [--name container_name]"
+
+DOCKER_BUILDKIT=1
+export BUILDAH_FORMAT=docker
+
+# Initialize variables
+DOCKER_COMMAND=""
+CONTAINER_NAME=""
+CMD_TO_RUN=""
+HOST_FLAGS=""
+IS_PODMAN=0
+if docker --version 2>/dev/null | grep -qi "podman" || \
+   (command -v readlink >/dev/null && readlink -f $(command -v docker) | grep -qi "podman"); then
+  IS_PODMAN=1
+  echo "Podman detected. Adding --userns=keep-id for rootless support."
+  HOST_FLAGS+=" --userns=keep-id"
+fi
+
+# Auto-detect platform for informational purposes
+ARCH=$(uname -m)
+if [[ "$ARCH" == "aarch64" ]] || [[ "$ARCH" == "arm64" ]]; then
+    DETECTED_PLATFORM="arm64"
+elif [[ "$ARCH" == "x86_64" ]]; then
+    DETECTED_PLATFORM="amd64"
+else
+    DETECTED_PLATFORM="unknown"
+fi
+
+# Check if we're on a Jetson
+ISJETSON=0
+if command -v nvpmodel &> /dev/null; then
+    #echo "This is likely a NVIDIA Jetson device."
+    ISJETSON=1
+    HOST_FLAGS+=" --runtime nvidia --privileged --ipc=host --pid host --cap-add SYS_PTRACE "
+else
+    echo ''
+    #echo "This does not appear to be a NVIDIA Jetson device (nvpmodel not found)."
+fi
+
+# Check if a container name is already set in the ENV
+if [ -n "$IN_CONTAINER_NAME" ]; then
+    echo "Already in container $IN_CONTAINER_NAME, you can now run your command."
+    exit
+fi
+
+DOCKER_COMMAND=$1
+if [ -z "$DOCKER_COMMAND" ]; then
+  echo "Please specify a command."
+  echo $USAGE
+  exit
+fi
+
+# Parse arguments
+shift 1  # Remove the command
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --name|-n)
+      CONTAINER_NAME="$2"
+      shift 2
+      ;;
+    *)
+      # For cmd command, remaining args are the command to execute
+      if [ "$DOCKER_COMMAND" = "cmd" ]; then
+        COMMAND_TO_EXEC="$*"
+        break
+      else
+        echo "Unknown argument: $1"
+        echo $USAGE
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+CONTAINER_NAME_FILE=$ROOT/config/name
+
+# If no custom name provided via command line, try to load from file
+if [ -z "$CONTAINER_NAME" ]; then
+  if test -f "$CONTAINER_NAME_FILE"; then
+    CONTAINER_NAME="$(cat $CONTAINER_NAME_FILE)"
+    # echo "Container name loaded from $CONTAINER_NAME_FILE: $CONTAINER_NAME"
+  fi
+fi
+
+if [ -z "$CONTAINER_NAME" ]; then
+  echo "Please specify a container name."
+  echo $USAGE
+  exit
+fi
+if [[ ! -f $CONTAINER_NAME_FILE ]]; then
+  echo $CONTAINER_NAME > $CONTAINER_NAME_FILE
+fi
+
+# Ensure .bash_history exists to prevent mount errors
+if [ ! -f "$HOME/.bash_history" ]; then
+    touch "$HOME/.bash_history"
+fi
+
+# Ensure .bash_profile exists to prevent permission errors in the container
+if [ ! -f "$HOME/.bash_profile" ]; then
+    touch "$HOME/.bash_profile"
+fi
+
+CONTAINER_FILE=$ROOT/docker/Dockerfile
+_DISPLAY="${DISPLAY-:0}"
+
+RUNNING_CONTAINER=$(docker container ls -q --filter name=$CONTAINER_NAME)
+
+EXEC="/bin/bash -l"
+MOUNT_DATA=""
+# Filter out non-existent mounts
+VALID_MOUNT_DATA=""
+# Use a while loop with a file descriptor to preserve variable scope if needed (though straight string split is okay here)
+# echo "$MOUNT_DATA" could contain newlines or spaces. We built it with spaces.
+# Let's rebuild the loop to check each -v flag.
+
+# We will iterate through the original lines again to be safe and clear
+MOUNT_DATA=""
+while read -r line; do
+    # Skip Jetson-specific mounts if not on Jetson
+    if [ "$ISJETSON" -eq 0 ]; then
+        if [[ "$line" == *"tegra"* ]] || \
+           [[ "$line" == *"nvhost"* ]] || \
+           [[ "$line" == *"nvmap"* ]] || \
+           [[ "$line" == *"argus"* ]]; then
+            continue
+        fi
+    fi
+
+    # Skip /dev mount if using Podman (fixes rootless permission denied)
+    if [ "$IS_PODMAN" -eq 1 ] && [[ "$line" == *"-v /dev:/dev"* ]]; then
+        echo "Podman detected. Skipping /dev:/dev mount to avoid permission errors."
+        continue
+    fi
+
+    # Expand the line
+    EXPANDED_LINE=$(eval echo -e "$line")
+
+    # Check if it's a bind mount definition
+    if [[ "$EXPANDED_LINE" == -v* ]]; then
+        # Extract host path: remove leading -v and space, then cut before the colon
+        # Handle cases like "-v /host/path:/container/path"
+        # CLEAN_LINE=${EXPANDED_LINE#-v }
+        # HOST_PATH=${CLEAN_LINE%%:*}
+        # Or simpler:
+        host_path=$(echo "$EXPANDED_LINE" | sed -E 's/^-v\s+([^:]+):.*/\1/')
+        
+        # Check existence
+        if [ -e "$host_path" ]; then
+             MOUNT_DATA="${MOUNT_DATA} ${EXPANDED_LINE}"
+        else
+             echo "Warning: Mount path '$host_path' does not exist. Skipping."
+        fi
+    else
+        # Not a bind mount (e.g. --device), add it
+        MOUNT_DATA="${MOUNT_DATA} ${EXPANDED_LINE}"
+    fi
+done < "$ROOT/config/mounts"
+
+PORT_DATA=""
+while read -r line; do
+    PORT_DATA="${PORT_DATA} $(eval echo -e "$line")"
+done < "$ROOT/config/ports"
+
+# host-specific setup
+case "$(uname -s)" in
+   Darwin)
+     echo 'Mac OS X'
+     _DISPLAY=":10"
+     # Host mode on macos does not work, remove this option, loaded from the ports config file
+     PORT_DATA=${PORT_DATA//--net=host/}
+     # instead just forward the TurboVNC port
+     PORT_DATA+="-p 5910:5910"
+     # Remove X11 socket mount for XQuartz, use TurboVNC instead
+     MOUNT_DATA=${MOUNT_DATA//-v \/tmp\/.X11-unix:\/tmp\/.X11-unix/}
+     ;;
+   Linux)
+     HOST_FLAGS+=" --runtime nvidia --gpus all --device=/dev/input"
+     HOST_EXEC=$EXEC
+     ;;
+   CYGWIN*|MINGW32*|MSYS*|MINGW*)
+     echo 'MS Windows'
+     ;;
+   *)
+     echo 'Other OS'
+     ;;
+esac
+
+dockerbuild() {
+  echo "Building container $CONTAINER_NAME from $CONTAINER_FILE with args:"
+  echo "  GID: $_GID"
+  echo "  UID: $_UID"
+  echo "  UNAME: $_UNAME"
+  echo "  ROOT: $ROOT"
+  echo "  PLATFORM: $DETECTED_PLATFORM"
+
+  docker build \
+    --network=host \
+    --build-arg gid=$_GID \
+    --build-arg uid=$_UID \
+    --build-arg username=$_UNAME \
+    --build-arg TARGETARCH=$DETECTED_PLATFORM \
+    -t $CONTAINER_NAME \
+    -f docker/Dockerfile $ROOT \
+    --progress=plain
+}
+dockerprune() {
+  docker image prune -f
+}
+dockerrun() {
+  # Check if container is running and if image has changed
+  local running_container_id=$(docker container ls -q --filter name="^/?${CONTAINER_NAME}$")
+  if [[ ! -z "$running_container_id" ]]; then
+     local running_image=$(docker inspect --format='{{.Image}}' $running_container_id 2>/dev/null)
+     local latest_image=$(docker image inspect --format='{{.Id}}' $CONTAINER_NAME 2>/dev/null)
+     
+     if [[ "$running_image" != "$latest_image" ]]; then
+         echo "Container $CONTAINER_NAME is using an old image. Restarting..."
+         dockerstop
+     else
+         echo "Container $CONTAINER_NAME is already running with the latest image."
+         RUNNING_CONTAINER=$running_container_id
+         return 0
+     fi
+  fi
+
+  # Retry docker run up to 3 times to avoid race when multiple processes try to
+  # create the same container name concurrently. If another process created
+  # the container between attempts, consider that a success.
+  local max_attempts=5
+  local attempt=1
+  # Prepare environment flags
+  local env_flags="-e DISPLAY=$_DISPLAY -e IN_CONTAINER_NAME=$CONTAINER_NAME"
+  if [[ -n "$HOST_GIT_COMMIT" ]]; then
+    env_flags+=" -e GIT_COMMIT_SHA=$HOST_GIT_COMMIT"
+  else
+    echo "Warning: Could not resolve host git commit hash; GIT_COMMIT_SHA will not be set in container."
+  fi
+  while true; do
+    if docker run --rm \
+      $HOST_FLAGS \
+      $MOUNT_DATA \
+      $PORT_DATA \
+      --ulimit nofile=65536:65536 \
+      $env_flags \
+      -it -d --name=$CONTAINER_NAME $CONTAINER_NAME $HOST_EXEC; then
+      # started successfully
+      RUNNING_CONTAINER=$(docker container ls -q --filter name="^/?${CONTAINER_NAME}$")
+      break
+    else
+      rc=$?
+      # Check if container exists now (another parallel process started it)
+      RUNNING_CONTAINER=$(docker container ls -q --filter name="^/?${CONTAINER_NAME}$")
+      if [[ ! -z "$RUNNING_CONTAINER" ]]; then
+        echo "Container $CONTAINER_NAME is already running (detected after failed run)."
+        break
+      fi
+      if [ $attempt -ge $max_attempts ]; then
+        echo "Failed to start container $CONTAINER_NAME after $attempt attempts."
+        return $rc
+      fi
+      echo "Attempt $attempt to start $CONTAINER_NAME failed; retrying..."
+      attempt=$((attempt+1))
+      sleep 5
+    fi
+  done
+  echo "Container $CONTAINER_NAME is running with ID $RUNNING_CONTAINER"
+}
+dockerstop() {
+  # Find any container with the name, running or stopped
+  local container_id=$(docker container ls -aq --filter name="^/?${CONTAINER_NAME}$")
+  if [[ ! -z "$container_id" ]]; then
+    echo "Stopping and removing container $CONTAINER_NAME ($container_id)..."
+    docker stop $container_id >/dev/null 2>&1 || true
+    docker rm $container_id >/dev/null 2>&1 || true
+  else
+    echo "$CONTAINER_NAME is not running or does not exist"
+  fi
+}
+dockershell() {
+  docker exec -it $RUNNING_CONTAINER $EXEC
+}
+dockercmd() {
+  RUNNING_CONTAINER=$(docker container ls -q --filter name=$CONTAINER_NAME)
+  local repo_dir="/home/$_UNAME/$(basename -- $ROOT)"
+  docker exec -it $RUNNING_CONTAINER /bin/bash -l -c "cd $repo_dir && $@"
+}
+
+case $DOCKER_COMMAND in
+  build)
+    dockerbuild
+    dockerprune
+    dockerstop
+    dockerrun
+    ;;
+  prune)
+    dockerprune
+    ;;
+  start)
+    dockerrun
+    ;;
+  stop)
+    if [[ ! -z "$RUNNING_CONTAINER" ]]; then
+      docker stop $RUNNING_CONTAINER
+      docker rm $RUNNING_CONTAINER
+    else
+      echo "$CONTAINER_NAME is not running"
+      # Check if there's a stopped container with the same name and remove it
+      STOPPED_CONTAINER=$(docker container ls -aq --filter name=$CONTAINER_NAME)
+      if [[ ! -z "$STOPPED_CONTAINER" ]]; then
+        echo "Removing stopped container $CONTAINER_NAME"
+        docker rm $STOPPED_CONTAINER
+      fi
+    fi
+    ;;
+  restart)
+    dockerstop
+    RUNNING_CONTAINER=$(docker container ls -q --filter name=$CONTAINER_NAME)
+    dockerrun
+    ;;
+  shell)
+    [[ ! -z "$RUNNING_CONTAINER" ]] || dockerrun
+    RUNNING_CONTAINER=$(docker container ls -q --filter name=$CONTAINER_NAME)
+    dockershell
+    ;;
+  cmd)
+    # Command was already parsed above
+    if [ -z "$COMMAND_TO_EXEC" ]; then
+      echo "Please specify a command to execute."
+      echo "Usage: $0 cmd [--name container_name] 'command'"
+      exit 1
+    fi
+    [[ ! -z "$RUNNING_CONTAINER" ]] || dockerrun
+    dockercmd "$COMMAND_TO_EXEC"
+    ;;
+  rm)
+    dockerstop
+    docker rmi $CONTAINER_NAME || echo "Image $CONTAINER_NAME does not exist"
+    ;;
+   *)
+     echo Unknown Command $DOCKER_COMMAND
+     # Display usage
+     echo $USAGE
+     exit 1
+     ;;
+esac

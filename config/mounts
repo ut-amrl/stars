@@ -1,0 +1,13 @@
+-v $ROOT:/home/$_UNAME/$(basename -- $ROOT)
+-v $HOME/.ssh/authorized_keys:/home/$_UNAME/.ssh/authorized_keys
+-v $HOME/.bash_history:/home/$_UNAME/.bash_history
+-v /tmp/.X11-unix:/tmp/.X11-unix
+-v /robodata/public_datasets:/robodata/public_datasets
+-v $ROOT/data:/data
+-v $ROOT/data:/scratch/swm
+-v $ROOT/../../group_gnn:/home/$_UNAME/group_gnn
+-v $ROOT/data/combined_v1.h5:/home/$_UNAME/$(basename -- $ROOT)/src/dataloaders/combined_v1.h5
+-v $ROOT/data/sean_together_v2.h5:/home/$_UNAME/$(basename -- $ROOT)/src/dataloaders/sean_together_v2.h5
+-v $ROOT/data/social_nav_v3.h5:/home/$_UNAME/$(basename -- $ROOT)/src/dataloaders/social_nav_v3.h5
+-v $ROOT/data/social_nav_eval_combined.h5:/home/$_UNAME/$(basename -- $ROOT)/src/dataloaders/social_nav_eval_combined.h5
+-v $ROOT/data/socialnav_human_oracle_v3.h5:/home/$_UNAME/$(basename -- $ROOT)/src/dataloaders/socialnav_human_oracle_v3.h5

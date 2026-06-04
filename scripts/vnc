@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# Create .vnc directory
+mkdir -p $HOME/.vnc
+
+# Create or overwrite xstartup with xfce4 and disable screen timeout/power management
+cat > $HOME/.vnc/xstartup.turbovnc << 'EOF'
+#!/bin/bash
+unset SESSION_MANAGER
+unset DBUS_SESSION_BUS_ADDRESS
+
+# Disable screen saver and power management
+xset s off
+xset s noblank
+xset -dpms
+
+# Disable xfce4 screen lock and power management
+mkdir -p ~/.config/xfce4/xfconf/xfce-perchannel-xml
+
+# Disable xfce4-screensaver
+cat > ~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml << 'XMLEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-screensaver" version="1.0">
+  <property name="saver" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+  <property name="lock" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+</channel>
+XMLEOF
+
+# Disable xfce4-power-manager screen blanking and lock
+cat > ~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml << 'XMLEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-power-manager" version="1.0">
+  <property name="xfce4-power-manager" type="empty">
+    <property name="dpms-enabled" type="bool" value="false"/>
+    <property name="blank-on-ac" type="int" value="0"/>
+    <property name="dpms-on-ac-sleep" type="uint" value="0"/>
+    <property name="dpms-on-ac-off" type="uint" value="0"/>
+    <property name="lock-screen-suspend-hibernate" type="bool" value="false"/>
+    <property name="logind-handle-lid-switch" type="bool" value="false"/>
+  </property>
+</channel>
+XMLEOF
+
+# Disable xfce4-session lock
+cat > ~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml << 'XMLEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-session" version="1.0">
+  <property name="general" type="empty">
+    <property name="LockCommand" type="string" value=""/>
+  </property>
+  <property name="shutdown" type="empty">
+    <property name="LockScreen" type="bool" value="false"/>
+  </property>
+</channel>
+XMLEOF
+
+dbus-launch --exit-with-session startxfce4
+EOF
+chmod +x $HOME/.vnc/xstartup.turbovnc
+
+# Kill any existing VNC server on :8
+/opt/TurboVNC/bin/vncserver -kill :8 > /dev/null 2>&1 || true
+
+# Remove stale lock files if they exist
+rm -f /tmp/.X11-unix/X8
+rm -f /tmp/.X8-lock
+
+# Start VNC server with no authentication
+# -geometry can be overridden by VNC_RESOLUTION env var
+RESOLUTION=${VNC_RESOLUTION:-1920x1080}
+
+echo "Starting TurboVNC server on :8 with resolution $RESOLUTION (no password)..."
+/opt/TurboVNC/bin/vncserver :8 -geometry $RESOLUTION -depth 24 -securitytypes None -xstartup $HOME/.vnc/xstartup.turbovnc
+
+# Display connection info based on platform
+if command -v nvpmodel &> /dev/null; then
+    # On Jetson, show CAR_IP if available
+    if [ -n "$CAR_IP" ]; then
+        echo "VNC Server started. Connect to $CAR_IP:5908"
+    else
+        echo "VNC Server started on :8 (port 5908)"
+    fi
+else
+    # On other platforms (e.g., macOS), show localhost
+    echo "VNC Server started. Connect to localhost:5908"
+fi

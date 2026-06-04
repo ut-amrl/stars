@@ -1,0 +1,47 @@
+__pycache__/
+
+# large data / binaries
+src/checkpoints/
+src/dataloaders/SEAN_TOGETHER_Dataset/
+src/dataloaders/train/
+src/dataloaders/train2/
+src/dataloaders/train3/
+src/dataloaders/synthetic_dataset1/
+src/dataloaders/synthetic_dataset2/
+src/dataloaders/dataset_split/
+src/dataloaders/dataset_splits_10x/
+src/dataloaders/dataset_splits_10x.zip
+src/dataloaders/ssub_test/
+src/dataloaders/dataset4/
+src/dataloaders/socialnavsub_synthetic_dataset4/
+src/dataloaders/frames/
+src/dataloaders/*.h5
+src/dataloaders/sean_together.h5
+src/dataloaders/sean_together_v2.h5
+src/dataloaders/graph_viz.png
+src/tsne_mask_follower.png
+src/dataloaders/test.py
+src/wandb/
+src/tea_debug.log
+src/results/
+src/experiments/
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+
+# venv
+venv/
+src/venv/
+.venv/
+
+# uv
+uv.lock
+
+# claude
+.claude/
+
+*.log
+experiments/
+data/

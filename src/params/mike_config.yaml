@@ -1,0 +1,153 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared config for social_world_model training scripts.
+# Each top-level section maps to one script:
+#   vae                → train_gnn_vae_v5.py
+#   linear_probe       → train_linear_probe_v5.py
+#   linear_probe_hgnn  → train_linear_probe_hgnn_v1.py
+#   rf_split           → train_rf_split.py
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── GNN-VAE Stage 1 ──────────────────────────────────────────────────────────
+vae:
+  h5_path:           dataloaders/sean_graph_v4.h5  # graph-format HDF5 used by SEANGraphDatasetV4
+  experiments_root:  experiments/gnn_vae_v5
+  device:            auto                           # auto | cuda | cpu
+  wandb:             false
+  progress_bar:      true
+  save_loss_plots:   true
+  loss_csv_filename: loss_history.csv
+  loss_plot_formats: [pdf, png]
+  epochs:            100
+  batch_size:        64
+  num_workers:       4
+  lr:                1.0e-3
+  hidden_dim:        64
+  latent_dim:        32
+  num_mp_layers:     2
+  beta_max:          1.0
+  warmup_epochs:     20
+  weight_decay:      1.0e-4
+  grad_clip:         1.0
+  incl_pool_attn:    false
+  incl_mlp_pool:     false
+  aux_decay:         0.1
+
+# ── Linear probe Stage 2 ─────────────────────────────────────────────────────
+linear_probe:
+  checkpoint:        experiments/gnn_vae_v5/best_gnn_vae_v5.pt  # path to saved VAE checkpoint
+  h5_path:           dataloaders/sean_graph_v4.h5
+  experiments_root:  experiments/linear_probe_v5
+  device:            auto
+  wandb:             false
+  progress_bar:      true
+  save_loss_plots:   true
+  loss_csv_filename: probe_history.csv
+  loss_plot_formats: [pdf, png]
+  epochs:            100
+  batch_size:        256
+  num_workers:       4
+  lr:                1.0e-3
+  weight_decay:      1.0e-4
+  raw_robot:         false
+  random_encoder:    false
+  mean_pool:         false
+  attn_pool:         false
+  mlp_pool:          false
+  eval_metrics_every: 5
+
+
+# ── RF split baseline ────────────────────────────────────────────────────────
+rf_split:
+  h5_path:             dataloaders/sean_together_v2.h5
+  experiments_root:    experiments/rf_split
+  wandb:               true
+  wandb_project:       social_world_model
+  n_trials:            10
+  n_jobs_rf:           5
+  save_plots:          true
+  plot_formats:        [pdf, png]
+  trials_csv_filename: optuna_trials.csv
+
+# ── EVLA Evaluation (frozen AE + probe) ─────────────────────────────────────
+eval_ssub:
+  ae_checkpoint:           experiments/hgnn_combined_v2/20260508_203950_hgnn_combined_v2/best_hgnn_combined_v1.pt
+  probe_checkpoint:        experiments/linear_probe_combined_ssub_v2/20260508_212819_linear_probe_combined_ssub_v2/best_linear_probe_combined_ssub_v1.pt
+  eval_h5_path:            dataloaders/social_nav_eval_combined.h5
+  device:                  cuda:0
+  batch_size:              64
+  num_workers:             4
+  hidden_dim:              128
+  latent_dim:              64
+  num_mp_layers:           3
+  edge_transformer_layers: 2
+  num_heads:               4
+  dropout:                 0.1
+  probe_hidden_dim:        128
+  probe_dropout:           0.1
+
+# ── Combined SEAN + SSUB HGNN self-supervised AE ─────────────────────────────
+homognn_params:
+  h5_path:                 dataloaders/SSUB_Real_comb_sean_homo_graph.h5
+  experiments_root:        experiments/hgnn_combined_v2
+  run_name:                hgnn_combined_v2
+  device:                  cuda:8
+  wandb:                   true
+  wandb_project:           social_world_model
+  epochs:                  10000
+  batch_size:              32
+  num_workers:             0
+  use_amp:                 true
+  lr:                      1.0e-3
+  hidden_dim:              128
+  latent_dim:              64
+  num_mp_layers:           3
+  edge_transformer_layers: 2
+  num_heads:               4
+  dropout:                 0.1
+  weight_decay:            1.0e-4
+  grad_clip:               1.0
+  seed:                    42
+  train_ratio:             0.80
+  val_ratio:               0.16
+  node_loss_weight:        1.0          
+  early_stopping_patience: 15
+  early_stopping_min_delta: 1.0e-4
+  use_weighted_sampling:   true
+  adaptive_reweight:       true
+  adaptive_warmup_epochs:  10
+  adaptive_ramp_epochs:    100
+  adaptive_max_alpha:      0.5
+
+linear_probe_hgnn_params:
+  checkpoint:               experiments/hgnn_combined_v2/20260508_203950_hgnn_combined_v2/best_hgnn_combined_v1.pt
+  split_indices_path:       experiments/hgnn_combined_v2/20260508_203950_hgnn_combined_v2/split_indices_hgnn_combined_v1.pt
+  h5_path:                  dataloaders/combined_v1.h5
+  experiments_root:         experiments/linear_probe_combined_ssub_v2
+  run_name:                 linear_probe_combined_ssub_v2
+  device:                   cuda:8
+  wandb:                    true
+  wandb_project:            social_world_model
+  epochs:                   10000
+  batch_size:               128
+  num_workers:              0
+  lr:                       1.0e-3
+  weight_decay:             1.0e-4
+  hidden_dim:               128
+  latent_dim:               64
+  num_mp_layers:            3
+  edge_transformer_layers:  2
+  num_heads:                4
+  dropout:                  0.1
+  early_stopping_patience:  15
+  early_stopping_min_delta: 1.0e-4
+  seed:                     42
+  eval_metrics_every:       5
+  pauc_max_fpr:             0.1
+  save_plots:               true
+  plot_formats:             [png]
+  history_csv_filename:     probe_history_v2.csv
+  use_weighted_sampling:    true
+  adaptive_reweight:        true
+  adaptive_warmup_epochs:   10
+  adaptive_ramp_epochs:     100
+  adaptive_max_alpha:       0.5

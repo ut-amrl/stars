@@ -1,0 +1,321 @@
+# Heterogeneous GNN-VAE experiment configuration snapshot.
+#
+# This file documents the current reproducibility pipeline implemented by:
+#   run_train_vae.sh
+#   run_label_eff.sh
+#   run_summarize.sh
+#   run_optuna.sh
+#   run_tsne.sh
+#
+# It is intentionally separate from params/config.yaml, which contains older
+# legacy experiment settings. The shell scripts are still the executable
+# source of truth unless they are later modified to read this YAML directly.
+
+metadata:
+  name: hetero_gnn_vae_current
+  generated_from:
+    - HETERO_README.md
+    - run_train_vae.sh
+    - run_label_eff.sh
+    - run_summarize.sh
+    - run_optuna.sh
+    - run_tsne.sh
+  protocol: "10 independent VAEs on one fixed data split, random weight initializations, no seeds"
+  gpu_policy: "CUDA_VISIBLE_DEVICES controls the physical GPU pool; wrappers mask each child process to one GPU and pass --gpu 0 internally."
+  seeds:
+    combined_vae: none
+    sean_only_vae: none
+    label_eff_subset_draws: unseeded_per_run_unit_nested_fractions
+    tsne_random_state: 42
+
+paths:
+  combined:
+    sean_h5: dataloaders/combined_v1.h5
+    snsb_h5: dataloaders/social_nav_v3.h5
+    snsb_oracle_h5: dataloaders/socialnav_human_oracle_v3.h5
+    split_file: checkpoints/split_indices_final.pt
+    default_checkpoint_root: checkpoints/v3_hetero_optuned128
+    repro_checkpoint_root: checkpoints/repro_v3_hetero_optuned128
+    checkpoint_name: best_unified_gnn_vae_v3_seednone.pt
+    split_name: split_used_v3_seednone.pt
+  sean_only:
+    h5_path: dataloaders/sean_together_v2.h5
+    combined_h5_for_scene_names: dataloaders/combined_v1.h5
+    split_file: checkpoints/split_indices_final_sean_only.pt
+    default_checkpoint_root: checkpoints/v4_sean_optuned128
+    repro_checkpoint_root: checkpoints/repro_v4_sean_optuned128
+    checkpoint_name: best_gnn_vae_v4.pt
+    split_name: split_indices_v4.pt
+
+optuna:
+  note: "Final paper setup tuned the combined SEAN+SNSB model. SEAN-only reuses selected combined 256x128 params where applicable."
+  search_space:
+    vae_lr:
+      low: 1.0e-4
+      high: 1.0e-2
+      scale: log
+    beta_max: [0.1, 0.5, 0.9]
+    warmup_epochs: [10, 25, 50]
+    dropout: [0.0, 0.1, 0.2]
+    adaptive_warmup_epochs: [10, 20]
+    adaptive_max_alpha: [0.25, 0.5, 0.75]
+    probe_lr:
+      note: "Legacy historical search parameter from the old probe-objective Optuna. Current Optuna objective ignores probe validation loss and does not tune probe_lr."
+  fixed_during_search:
+    hidden_dim: 256
+    latent_dim: 128
+    num_mp_layers: 2
+    batch_size: 32
+    vae_weight_decay: 1.0e-4
+    temporal_edge_transformer_layers: 3
+    temporal_edge_transformer_heads: 4
+    adaptive_ramp_epochs: 100
+    snsb_node_features: dropped
+    optuna_selection_metric: combined_vae_validation_loss
+  best_trial_256x128:
+    study: unified_v3_256x128_run1
+    trial: 10
+    note: "Historical selected 256x128 configuration used by the current wrappers. It came from the earlier probe-objective study; current Optuna searches minimize VAE validation loss only."
+    historical_probe_val_loss: 0.1963
+    historical_best_val_macro_f1_logged: 0.8287
+    full_precision_selected:
+      hidden_dim: 256
+      latent_dim: 128
+      batch_size: 32
+      num_mp_layers: 2
+      temporal_edge_transformer_layers: 3
+      temporal_edge_transformer_heads: 4
+      vae_lr: 0.00011564170737335981
+      beta_max: 0.9463296134543038
+      warmup_epochs: 25
+      dropout: 0.2
+      adaptive_warmup_epochs: 20
+      adaptive_max_alpha: 0.75
+      adaptive_ramp_epochs: 100
+      probe_lr: 0.0010611875591918542
+    wrapper_defaults_actually_run:
+      note: "These are the exact rounded defaults currently hardcoded in run_train_vae.sh."
+      lr: 0.00011564
+      beta_max: 0.9
+
+model_architecture:
+  combined_unified:
+    script: train_unified_gnn_vae_v3.py
+    model: models/unified_gnn_vae_v1.py
+    node_types: [robot, bystander]
+    edge_types:
+      - [robot, to, bystander]
+      - [bystander, to, robot]
+      - [bystander, to, bystander]
+    sean_timesteps: 40
+    snsb_timesteps: 20
+    edge_feature_dim: 8
+    temporal_edge_encoder:
+      type: transformer
+      layers: 3
+      heads: 4
+      positional_embeddings: learned
+    message_passing:
+      style: HEAT
+      attention_input: "[h_src || h_dst || edge_embedding || edge_type_embedding]"
+      attention: destination_wise_softmax
+      update: "LayerNorm(h + update_mlp([h || aggregated_message]))"
+    node_initialization:
+      sean_robot: "592D normalized robot features through MLP"
+      sean_bystander: "8D learnable bystander embedding concatenated with mean robot-to-bystander edge geometry"
+      snsb_robot: "8D learnable robot embedding concatenated with mean incident robot-bystander edge geometry"
+      snsb_bystander: "8D learnable bystander embedding concatenated with mean incident robot-bystander edge geometry"
+      snsb_60d_node_features: dropped
+  sean_only_v4:
+    script: train_gnn_vae_v4.py
+    model: models/gnn_vae_v4.py
+    node_types: [robot, follower, bystander]
+    edge_types:
+      - [robot, to, follower]
+      - [follower, to, robot]
+      - [robot, to, bystander]
+      - [bystander, to, robot]
+      - [follower, to, bystander]
+      - [bystander, to, follower]
+      - [bystander, to, bystander]
+    timesteps: 40
+    edge_feature_dim: 8
+    temporal_edge_encoder:
+      type: transformer
+      layers: 3
+      heads: 4
+      positional_embeddings: learned
+    default_probe_embedding: "[z_robot || z_follower || mean(z_bystanders)]"
+
+train_vae_defaults:
+  wrapper: run_train_vae.sh
+  common:
+    n_vaes: 10
+    epochs: 1000
+    es_patience: 20
+    hidden_dim: 256
+    latent_dim: 128
+    num_mp_layers: 2
+    lr: 0.00011564
+    beta_max: 0.9
+    warmup_epochs: 25
+    dropout: 0.2
+    batch_size: 32
+    num_workers: 4
+    weight_decay: 1.0e-4
+    grad_clip: 20.0
+    scheduler:
+      type: ReduceLROnPlateau
+      patience: 5
+      factor: 0.5
+    wandb: false
+  combined:
+    checkpoint_root_default: checkpoints/v3_hetero_optuned128
+    checkpoint_root_repro: checkpoints/repro_v3_hetero_optuned128
+    seed: none
+    weighted_sampling: true
+    adaptive_warmup_epochs: 20
+    adaptive_max_alpha: 0.75
+    adaptive_ramp_epochs: 100
+    sean_loss_weight: 1.0
+    snsb_loss_weight: 1.0
+    epoch_steps: null
+  sean_only:
+    checkpoint_root_default: checkpoints/v4_sean_optuned128
+    checkpoint_root_repro: checkpoints/repro_v4_sean_optuned128
+    edge_transformer_layers: 3
+    edge_transformer_heads: 4
+    incl_pool_attn: false
+    incl_mlp_pool: false
+    aux_decay: 0.1
+
+label_efficiency:
+  wrapper: run_label_eff.sh
+  fractions: [0.01, 0.05, 0.10, 0.25, 0.50, 1.00]
+  n_subset_seeds: 10
+  subset_draws: "Unseeded scene permutations per run-unit; fractions nest within each run-unit."
+  probe:
+    lr: 1.0e-3
+    epochs: 1000
+    patience: 20
+    batch_size: 128
+    weight_decay: 1.0e-4
+  combined:
+    eval_script: eval_label_efficiency.py
+    tasks: [sean, snsb]
+    rows_per_vae: 120
+    expected_merged_lines_10_vaes: 1201
+    output_prefix_default: label_eff_results
+    checkpoint_name: best_unified_gnn_vae_v3_seednone.pt
+    split_name: split_used_v3_seednone.pt
+    snsb_pa: mandatory_when_oracle_action_probs_available
+  sean_only:
+    eval_script: eval_sean_label_efficiency_v4.py
+    tasks: [sean]
+    rows_per_vae: 60
+    expected_merged_lines_10_vaes: 601
+    flip_surprise_default: true
+    output_prefix_default: label_eff_results
+
+probe_only_ablations:
+  combined_supported_by_run_label_eff_extra:
+    random_encoder:
+      extra: "--mode random_encoder"
+      tasks: [sean, snsb]
+    weighted_random_baseline:
+      extra: "--mode weighted_random_baseline"
+      tasks: [sean, snsb]
+    robot_only:
+      extra: "--ablation robot_only"
+      tasks: [sean, snsb]
+    bystander_only:
+      extra: "--ablation bystander_only"
+      tasks: [sean, snsb]
+  sean_only_supported_by_run_label_eff_extra:
+    raw_robot:
+      extra: "--ablation raw_robot"
+      input_dim: 592
+      tasks: [sean]
+  intentionally_not_wrapped:
+    - no_follower
+    - zero_follower
+
+summarization:
+  wrapper: run_summarize.sh
+  script: summarize_label_efficiency.py
+  combined:
+    default_task: both
+    expected_lines_10_vaes: 1201
+    outputs: [summary_sean.csv, summary_snsb.csv]
+  sean_only:
+    default_task: sean
+    expected_lines_10_vaes: 601
+    outputs: [summary_sean.csv]
+  reported_statistics: "mean and standard deviation across runs per label-fraction cell"
+
+tsne:
+  wrapper: run_tsne.sh
+  script: visualize_combined_tsne.py
+  default_vae_root: checkpoints/v3_hetero_optuned128
+  default_n_vaes: 10
+  default_split: all
+  default_space: encoder
+  default_color_by: truth
+  default_perplexity: 30
+  default_probe_lr: 1.0e-3
+  default_probe_epochs: 1000
+  default_probe_patience: 20
+  batch_size: 128
+  num_workers: 0
+  split_file_default_per_vae: split_used_v3_seednone.pt
+  spaces:
+    encoder: "t-SNE coordinates from VAE encoder embeddings"
+    probe_logits: "t-SNE coordinates from trained linear-probe logits"
+    probe_probs: "t-SNE coordinates from sigmoid probe probabilities"
+    probe_preds: "t-SNE coordinates from thresholded probe predictions"
+  color_by:
+    truth: "colors from binarized ground-truth labels"
+    probe_preds: "colors from thresholded linear-probe predictions"
+  paper_style_comparison: "Use --space encoder for both plots; change only --color-by truth vs probe_preds."
+
+optuna_wrapper:
+  wrapper: run_optuna.sh
+  n_trials_default_per_worker: 10
+  hidden_dim_default: 256
+  latent_dim_default: 128
+  combined:
+    script: optuna_unified_v1.py
+    mode: search
+  sean_only:
+    script: optuna_search_v4.py
+    mode: search
+    flip_surprise_default: true
+
+metrics:
+  sean:
+    labels: [competence, surprise, intention]
+    binarization_threshold: 3
+    flip_surprise: true
+    reported:
+      - f1_macro
+      - auc_macro
+      - acc_macro
+      - f1_competence
+      - auc_competence
+      - acc_competence
+      - f1_surprise
+      - auc_surprise
+      - acc_surprise
+      - f1_intention
+      - auc_intention
+      - acc_intention
+  snsb:
+    classes: [avoid, follow, overtake, yield, not_consider]
+    reported:
+      - f1_macro3
+      - f1_macro
+      - acc
+      - pa
+      - per_class_f1
+      - per_class_precision
+      - per_class_accuracy
