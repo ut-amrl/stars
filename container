@@ -23,8 +23,8 @@ IS_PODMAN=0
 if docker --version 2>/dev/null | grep -qi "podman" || \
    (command -v readlink >/dev/null && readlink -f $(command -v docker) | grep -qi "podman"); then
   IS_PODMAN=1
-  echo "Podman detected. Adding --userns=keep-id for rootless support."
-  HOST_FLAGS+=" --userns=keep-id"
+  echo "Podman detected. Running container as root inside to support GPU access."
+  HOST_FLAGS+=" --user root -e HOME=/home/$_UNAME"
 fi
 
 # Auto-detect platform for informational purposes
@@ -186,7 +186,15 @@ case "$(uname -s)" in
      MOUNT_DATA=${MOUNT_DATA//-v \/tmp\/.X11-unix:\/tmp\/.X11-unix/}
      ;;
    Linux)
-     HOST_FLAGS+=" --runtime nvidia --gpus all --device=/dev/input"
+     if [ "$IS_PODMAN" -eq 1 ]; then
+       HOST_FLAGS+=" --security-opt=label=disable"
+       if [ -d "/usr/share/containers/oci/hooks.d" ]; then
+         HOST_FLAGS+=" --hooks-dir=/usr/share/containers/oci/hooks.d"
+       fi
+       HOST_FLAGS+=" --device=/dev/input"
+     else
+       HOST_FLAGS+=" --runtime nvidia --gpus all --device=/dev/input"
+     fi
      HOST_EXEC=$EXEC
      ;;
    CYGWIN*|MINGW32*|MSYS*|MINGW*)
