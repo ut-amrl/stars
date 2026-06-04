@@ -18,9 +18,9 @@ TASK=""
 
 usage() {
   cat <<'EOF'
-Usage: ./run_summarize.sh --pipeline combined|sean [options]
+Usage: ./run_summarize.sh --pipeline combined|sean|homo [options]
 
-  --pipeline     combined | sean                         [required]
+  --pipeline     combined | sean | homo                  [required]
   --in-prefix S  per-VAE CSV prefix (<prefix>_<vae>.csv)  (default: label_eff_results)
   --vae-prefix S per-VAE token in the CSV name            (default: run)
   --n-vaes N     number of per-VAE CSVs                   (default: 10)
@@ -43,11 +43,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ "$PIPELINE" = combined ] || [ "$PIPELINE" = sean ] || {
-  echo "ERROR: --pipeline must be 'combined' or 'sean'" >&2; usage; exit 1; }
+[ "$PIPELINE" = combined ] || [ "$PIPELINE" = sean ] || [ "$PIPELINE" = homo ] || {
+  echo "ERROR: --pipeline must be 'combined', 'sean', or 'homo'" >&2; usage; exit 1; }
 
 : "${MERGED:=${IN_PREFIX}.csv}"
-if [ "$PIPELINE" = combined ]; then
+if [ "$PIPELINE" = combined ] || [ "$PIPELINE" = homo ]; then
   : "${TASK:=both}"; EXPECT_LINES=$(( 1 + N_VAES * 120 ))
 else
   : "${TASK:=sean}"; EXPECT_LINES=$(( 1 + N_VAES * 60 ))

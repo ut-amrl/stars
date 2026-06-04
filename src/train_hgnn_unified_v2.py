@@ -22,8 +22,8 @@ SRC_DIR      = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SRC_DIR)
 sys.path.append(SRC_DIR)
 
-from dataloaders.unified_graph_dataset_v1 import UnifiedGraphDataset
-from models.hgnn_combined_v1 import HGNNCombinedAE as Model
+from dataloaders.unified_graph_dataset_all import UnifiedGraphDataset
+from models.hgnn_combined_v2 import HGNNCombinedVAE as Model
 
 IGNORE_LABEL       = -100
 NUM_ACTION_CLASSES = 5
@@ -128,11 +128,10 @@ def compute_per_sample_losses(model, dataset, device, batch_size, ssub):
         for batch in loader:
             batch = batch.to(device)
 
+            edge_recon, node_feat_recon, mu, logvar = model(batch)
             if ssub:
-                edge_recon = model(batch)
                 per_edge = ((edge_recon - batch.edge_attr) ** 2).mean(dim=(-2, -1))
             else:
-                edge_recon, _ = model(batch)
                 src, dst   = batch.edge_index[0], batch.edge_index[1]
                 edge_valid = batch.valid_mask[src] * batch.valid_mask[dst]
                 per_edge   = ((edge_recon - batch.edge_attr) ** 2
@@ -147,7 +146,7 @@ def compute_per_sample_losses(model, dataset, device, batch_size, ssub):
     return torch.cat(all_losses, dim=0)
 
 
-def run_epoch(model, loader, device, ssub, node_loss_weight,
+def run_epoch(model, loader, device, ssub, node_loss_weight, beta,
               optimizer=None, grad_clip=None, use_amp=False, scaler=None):
     training = optimizer is not None
     model.train(training)
@@ -155,6 +154,7 @@ def run_epoch(model, loader, device, ssub, node_loss_weight,
     total_loss      = 0.0
     total_edge_loss = 0.0
     total_node_loss = 0.0
+    total_kl_loss   = 0.0
     n_batches       = 0
 
     for batch_idx, batch in enumerate(loader, start=1):
@@ -165,13 +165,12 @@ def run_epoch(model, loader, device, ssub, node_loss_weight,
 
         try:
             with torch.cuda.amp.autocast(enabled=use_amp):
+                edge_recon, node_feat_recon, mu, logvar = model(batch)
+
                 if ssub:
-                    edge_recon = model(batch)
                     loss_edge  = F.mse_loss(edge_recon, batch.edge_attr)
                     loss_node  = torch.tensor(0.0, device=device)
                 else:
-                    edge_recon, node_feat_recon = model(batch)
-
                     src, dst   = batch.edge_index[0], batch.edge_index[1]
                     edge_valid = batch.valid_mask[src] * batch.valid_mask[dst]
                     loss_edge  = (
@@ -184,7 +183,8 @@ def run_epoch(model, loader, device, ssub, node_loss_weight,
                     else:
                         loss_node = torch.tensor(0.0, device=device)
 
-                loss = loss_edge + node_loss_weight * loss_node
+                loss_kl = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+                loss = loss_edge + node_loss_weight * loss_node + beta * loss_kl
 
             if training:
                 if use_amp and scaler is not None:
@@ -211,6 +211,7 @@ def run_epoch(model, loader, device, ssub, node_loss_weight,
         total_loss      += float(loss.detach().cpu())
         total_edge_loss += float(loss_edge.detach().cpu())
         total_node_loss += float(loss_node.detach().cpu())
+        total_kl_loss   += float(loss_kl.detach().cpu())
         n_batches       += 1
 
     if n_batches == 0:
@@ -220,7 +221,7 @@ def run_epoch(model, loader, device, ssub, node_loss_weight,
         )
 
     n = max(1, n_batches)
-    return total_loss / n, total_edge_loss / n, total_node_loss / n
+    return total_loss / n, total_edge_loss / n, total_node_loss / n, total_kl_loss / n
 
 
 def train(args):
@@ -237,10 +238,17 @@ def train(args):
 
     dataset = UnifiedGraphDataset(args.h5_path, ssub=args.ssub)
 
-    test_ratio = 1.0 - args.train_ratio - args.val_ratio
-    train_idx, val_idx, test_idx = dataset.scene_split(
-        val_ratio=args.val_ratio, test_ratio=test_ratio, seed=args.seed,
-    )
+    if getattr(args, "split_file", None) is not None:
+        saved = torch.load(args.split_file, map_location="cpu")
+        train_idx = list(saved["train"])
+        val_idx   = list(saved["val"])
+        test_idx  = list(saved["test"])
+        print(f"Loaded split from {args.split_file}")
+    else:
+        test_ratio = 1.0 - args.train_ratio - args.val_ratio
+        train_idx, val_idx, test_idx = dataset.scene_split(
+            val_ratio=args.val_ratio, test_ratio=test_ratio, seed=args.seed,
+        )
     dataset.source_counts(train_idx, val_idx, test_idx)
 
     if not args.ssub:
@@ -325,7 +333,11 @@ def train(args):
     epochs_no_improve = 0
     node_loss_weight  = args.node_loss_weight
 
+    beta_max = getattr(args, "beta_max", 0.1)
+    beta_warmup = getattr(args, "beta_warmup_epochs", getattr(args, "warmup_epochs", 50))
+
     for epoch in range(1, args.epochs + 1):
+        beta = min(beta_max, beta_max * epoch / max(1, beta_warmup))
 
         if (use_weighted and use_adaptive and sampler is not None
                 and stratified_weights is not None
@@ -343,30 +355,31 @@ def train(args):
             ess = float(1.0 / (combined ** 2).sum())
             print(f"  Adaptive reweight: alpha={alpha:.3f}  ESS={ess:.0f}/{len(train_set)}")
 
-        train_loss, train_edge, train_node = run_epoch(
-            model, train_loader, device, args.ssub, node_loss_weight,
+        train_loss, train_edge, train_node, train_kl = run_epoch(
+            model, train_loader, device, args.ssub, node_loss_weight, beta,
             optimizer=optimizer, grad_clip=args.grad_clip,
             use_amp=use_amp, scaler=scaler,
         )
         with torch.no_grad():
-            val_loss, val_edge, val_node = run_epoch(
-                model, val_loader, device, args.ssub, node_loss_weight,
+            val_loss, val_edge, val_node, val_kl = run_epoch(
+                model, val_loader, device, args.ssub, node_loss_weight, beta,
                 use_amp=use_amp,
             )
 
         print(
-            f"Epoch {epoch:03d}/{args.epochs} | "
-            f"train={train_loss:.6f} (edge={train_edge:.6f} node={train_node:.6f}) | "
-            f"val={val_loss:.6f} (edge={val_edge:.6f} node={val_node:.6f}) | "
+            f"Epoch {epoch:03d}/{args.epochs} | beta={beta:.4f} | "
+            f"train={train_loss:.6f} (edge={train_edge:.6f} node={train_node:.6f} kl={train_kl:.6f}) | "
+            f"val={val_loss:.6f} (edge={val_edge:.6f} node={val_node:.6f} kl={val_kl:.6f}) | "
             f"lr={optimizer.param_groups[0]['lr']:.2e}"
         )
 
         log_dict = {
             "epoch": epoch,
+            "beta": beta,
             "train/loss": train_loss, "train/loss_edge": train_edge,
-            "train/loss_node": train_node,
+            "train/loss_node": train_node, "train/kl": train_kl,
             "val/loss":   val_loss,   "val/loss_edge":   val_edge,
-            "val/loss_node":   val_node,
+            "val/loss_node":   val_node, "val/kl": val_kl,
             "lr": optimizer.param_groups[0]["lr"],
         }
         if use_weighted and use_adaptive and epoch > warmup_epochs:
@@ -410,14 +423,56 @@ if __name__ == "__main__":
     parser.add_argument("--config", default="params/config.yaml")
     parser.add_argument("--ssub", action="store_true",
                         help="SSUB-only mode (no valid_mask, no node features)")
+    parser.add_argument("--epochs", type=int, default=None)
+    parser.add_argument("--batch_size", type=int, default=None)
+    parser.add_argument("--num_workers", type=int, default=None)
+    parser.add_argument("--lr", type=float, default=None)
+    parser.add_argument("--hidden_dim", type=int, default=None)
+    parser.add_argument("--latent_dim", type=int, default=None)
+    parser.add_argument("--num_mp_layers", type=int, default=None)
+    parser.add_argument("--edge_transformer_layers", type=int, default=None)
+    parser.add_argument("--num_heads", type=int, default=None)
+    parser.add_argument("--dropout", type=float, default=None)
+    parser.add_argument("--weight_decay", type=float, default=None)
+    parser.add_argument("--grad_clip", type=float, default=None)
+    parser.add_argument("--seed", type=lambda s: None if s.lower() == "none" else int(s), default=None)
+    parser.add_argument("--h5_path", default=None)
+    parser.add_argument("--experiments_root", default=None)
+    parser.add_argument("--checkpoint_dir", default=None)
+    parser.add_argument("--split_file", default=None)
+    parser.add_argument("--beta_max", type=float, default=None)
+    parser.add_argument("--beta_warmup_epochs", type=int, default=None)
+    parser.add_argument("--warmup_epochs", type=int, default=None)
+    parser.add_argument("--run_name", default=None)
+    parser.add_argument("--weighted_sampling", action="store_true", default=None)
+    parser.add_argument("--adaptive_warmup_epochs", type=int, default=None)
+    parser.add_argument("--adaptive_max_alpha", type=float, default=None)
+    parser.add_argument("--adaptive_ramp_epochs", type=int, default=None)
+    parser.add_argument("--device", default=None)
+    parser.add_argument("--wandb", action="store_true", default=False)
     cli_args = parser.parse_args()
 
     args             = load_config(cli_args.config)
     args.ssub        = cli_args.ssub
     args.config_path = os.path.abspath(cli_args.config)
+    
+    # Overwrite loaded config parameters with command-line ones if they were provided
+    for key, val in vars(cli_args).items():
+        if val is not None and key != "config":
+            if key == "weighted_sampling":
+                args.use_weighted_sampling = val
+            else:
+                setattr(args, key, val)
+
     args.h5_path     = os.path.abspath(args.h5_path)
     args.experiments_root = os.path.abspath(args.experiments_root)
-    args.run_dir     = create_run_dir(args.experiments_root, args.run_name)
+    
+    # Handle checkpoint directory
+    if cli_args.checkpoint_dir is not None:
+        args.run_dir = os.path.abspath(cli_args.checkpoint_dir)
+        os.makedirs(args.run_dir, exist_ok=True)
+    else:
+        args.run_dir = create_run_dir(args.experiments_root, args.run_name)
 
     shutil.copy2(args.config_path, os.path.join(args.run_dir, "config.yaml"))
     with open(os.path.join(args.run_dir, "config_resolved.yaml"), "w", encoding="utf-8") as f:

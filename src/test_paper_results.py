@@ -92,34 +92,57 @@ def load_summary_csv(csv_path):
                     metrics_data[metric][frac] = float(v)
     return metrics_data
 
-def run_experiment(pipeline, is_fast):
+def run_experiment(pipeline, is_fast, device=None):
     """Run the VAE training, label eff probing, and summarization using subprocess."""
-    print(TerminalColors.WARNING + f"[*] Running full {pipeline} pipeline (fast={is_fast}). This may take a while..." + TerminalColors.ENDC)
+    print(TerminalColors.WARNING + f"[*] Running full {pipeline} pipeline (fast={is_fast}, device={device}). This may take a while..." + TerminalColors.ENDC)
     
     out_root = f"checkpoints/test_repro_{pipeline}"
     out_prefix = f"../experiments/label_eff_results_repro_{pipeline}"
+    script_pipeline = "combined" if pipeline == "hetero" else "homo"
     
     # 1. Train VAE
     train_cmd = [
         "./hetero_scripts/run_train_vae.sh",
-        "--pipeline", "combined" if pipeline == "hetero" else "sean", # The provided scripts support 'combined' or 'sean'
+        "--pipeline", script_pipeline,
         "--out-root", out_root
     ]
     if is_fast:
-        train_cmd.extend(["--n-vaes", "1", "--epochs", "2"])
+        train_cmd.extend(["--n-vaes", "1", "--epochs", "2", "--batch-size", "4", "--hidden-dim", "64", "--latent-dim", "32"])
     
+    train_extra = []
+    if device is not None:
+        train_extra.append(f"--device {device}")
+    
+    if train_extra:
+        train_cmd.extend(["--extra", " ".join(train_extra)])
+        
     print(" ->", " ".join(train_cmd))
     subprocess.run(train_cmd, check=True)
     
     # 2. Run Label Efficiency
     label_cmd = [
         "./hetero_scripts/run_label_eff.sh",
-        "--pipeline", "combined" if pipeline == "hetero" else "sean",
+        "--pipeline", script_pipeline,
         "--vae-root", out_root,
         "--out-prefix", out_prefix
     ]
+    
+    label_extra = []
     if is_fast:
-        label_cmd.extend(["--n-vaes", "1", "--extra", "--epochs 5"])
+        label_cmd.extend(["--n-vaes", "1"])
+        label_extra.append("--epochs 5")
+        
+    if device == "cpu":
+        label_extra.append("--gpu -1")
+    elif device is not None and "cuda" in device:
+        if ":" in device:
+            gpu_idx = device.split(":")[1]
+            label_extra.append(f"--gpu {gpu_idx}")
+        else:
+            label_extra.append("--gpu 0")
+            
+    if label_extra:
+        label_cmd.extend(["--extra", " ".join(label_extra)])
     
     print(" ->", " ".join(label_cmd))
     subprocess.run(label_cmd, check=True)
@@ -128,7 +151,7 @@ def run_experiment(pipeline, is_fast):
     merged_csv = f"{out_prefix}.csv"
     summ_cmd = [
         "./hetero_scripts/run_summarize.sh",
-        "--pipeline", "combined" if pipeline == "hetero" else "sean",
+        "--pipeline", script_pipeline,
         "--in-prefix", out_prefix,
         "--merged", merged_csv
     ]
@@ -191,6 +214,7 @@ def main():
     parser.add_argument("--csv-sean", type=str, help="Path to precomputed SEAN summary CSV")
     parser.add_argument("--csv-sns", type=str, help="Path to precomputed SNS summary CSV")
     parser.add_argument("--tolerance", type=float, default=None, help="Custom flat absolute tolerance for F1-score comparison (overrides paper standard deviations if set)")
+    parser.add_argument("--device", type=str, default=None, help="Device override for training/eval (e.g. cpu or cuda:0)")
     args = parser.parse_args()
 
     results_hetero = {}
@@ -225,7 +249,7 @@ def main():
 
     if run_hetero_flag:
         print("\n" + "="*60 + "\nRUNNING HETEROGENEOUS EXPERIMENTS\n" + "="*60)
-        sean_csv, sns_csv = run_experiment("hetero", args.fast)
+        sean_csv, sns_csv = run_experiment("hetero", args.fast, device=args.device)
         results_hetero["sean"] = load_summary_csv(sean_csv)
         results_hetero["snsb"] = load_summary_csv(sns_csv)
         
@@ -235,7 +259,7 @@ def main():
 
     if run_homo_flag:
         print("\n" + "="*60 + "\nRUNNING HOMOGENEOUS EXPERIMENTS\n" + "="*60)
-        sean_csv, sns_csv = run_experiment("homo", args.fast)
+        sean_csv, sns_csv = run_experiment("homo", args.fast, device=args.device)
         results_homo["sean"] = load_summary_csv(sean_csv)
         if os.path.exists(sns_csv):
             results_homo["snsb"] = load_summary_csv(sns_csv)

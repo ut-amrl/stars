@@ -301,7 +301,10 @@ def main():
                         help="Probe-only ablation. raw_robot probes normalized robot input features directly.")
     args = parser.parse_args()
 
-    device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
+    if args.gpu < 0:
+        device = torch.device("cpu")
+    else:
+        device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device} | Output: {args.output}")
     for vae_dir in args.vae_dirs:
         process_vae_dir(vae_dir, args, device)

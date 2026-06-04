@@ -777,7 +777,10 @@ def main():
         abl_suffix  = f"_{args.ablation}" if args.ablation else ""
         args.output = f"label_eff_results{mode_suffix}{abl_suffix}.csv"
 
-    device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
+    if args.gpu < 0:
+        device = torch.device("cpu")
+    else:
+        device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device} | Mode: {args.mode} | Output: {args.output}")
 
     for vae_dir in args.vae_dirs:

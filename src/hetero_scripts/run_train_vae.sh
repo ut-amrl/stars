@@ -30,9 +30,9 @@ EXTRA=""
 
 usage() {
   cat <<'EOF'
-Usage: ./run_train_vae.sh --pipeline combined|sean [options]
+Usage: ./run_train_vae.sh --pipeline combined|sean|homo [options]
 
-  --pipeline      combined | sean                          [required]
+  --pipeline      combined | sean | homo                   [required]
   --n-vaes  N     number of Protocol-B VAEs          (default: 10)
   --out-root DIR  checkpoint root (per-VAE: DIR/run{i})
                   default: combined -> checkpoints/v3_hetero_optuned128
@@ -68,8 +68,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ "$PIPELINE" = combined ] || [ "$PIPELINE" = sean ] || {
-  echo "ERROR: --pipeline must be 'combined' or 'sean'" >&2; usage; exit 1; }
+[ "$PIPELINE" = combined ] || [ "$PIPELINE" = sean ] || [ "$PIPELINE" = homo ] || {
+  echo "ERROR: --pipeline must be 'combined', 'sean', or 'homo'" >&2; usage; exit 1; }
 
 COMMON=( --epochs "$EPOCHS" --hidden_dim "$HIDDEN_DIM" --latent_dim "$LATENT_DIM"
          --lr "$LR" --beta_max "$BETA_MAX" --warmup_epochs "$WARMUP_EPOCHS"
@@ -82,6 +82,16 @@ if [ "$PIPELINE" = combined ]; then
          --h5_path      dataloaders/combined_v1.h5
          --snsb_h5_path dataloaders/social_nav_v3.h5
          --split_file   checkpoints/split_indices_final.pt
+         --seed none
+         --weighted_sampling
+         --adaptive_warmup_epochs 20 --adaptive_max_alpha 0.75 --adaptive_ramp_epochs 100
+         "${COMMON[@]}" )
+elif [ "$PIPELINE" = homo ]; then
+  : "${OUT_ROOT:=checkpoints/hgnn_combined_v8}"
+  BASE=( train_hgnn_unified_v2.py
+         --h5_path      dataloaders/combined_v1.h5
+         --split_file   checkpoints/split_indices_final.pt
+         --edge_transformer_layers 3 --num_heads 4
          --seed none
          --weighted_sampling
          --adaptive_warmup_epochs 20 --adaptive_max_alpha 0.75 --adaptive_ramp_epochs 100

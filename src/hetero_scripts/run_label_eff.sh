@@ -24,9 +24,9 @@ EXTRA=""
 
 usage() {
   cat <<'EOF'
-Usage: ./run_label_eff.sh --pipeline combined|sean [options]
+Usage: ./run_label_eff.sh --pipeline combined|sean|homo [options]
 
-  --pipeline       combined | sean                       [required]
+  --pipeline       combined | sean | homo                [required]
   --n-vaes N       number of VAEs                  (default: 10)
   --vae-root DIR   VAE checkpoint root; per-VAE dir = DIR/<prefix><i>
                    default: combined -> checkpoints/v3_hetero_optuned128
@@ -57,11 +57,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ "$PIPELINE" = combined ] || [ "$PIPELINE" = sean ] || {
-  echo "ERROR: --pipeline must be 'combined' or 'sean'" >&2; usage; exit 1; }
+[ "$PIPELINE" = combined ] || [ "$PIPELINE" = sean ] || [ "$PIPELINE" = homo ] || {
+  echo "ERROR: --pipeline must be 'combined', 'sean', or 'homo'" >&2; usage; exit 1; }
 
 if [ "$PIPELINE" = combined ]; then
   : "${VAE_ROOT:=checkpoints/v3_hetero_optuned128}"
+  EXPECT_LINES=121          # 1 header + 120 rows
+elif [ "$PIPELINE" = homo ]; then
+  : "${VAE_ROOT:=checkpoints/hgnn_combined_v8}"
   EXPECT_LINES=121          # 1 header + 120 rows
 else
   : "${VAE_ROOT:=checkpoints/v4_sean_optuned128}"
@@ -88,6 +91,8 @@ build_cmd() {   # $1 = vae index -> sets global CMD array
   local i="$1" dir="$VAE_ROOT/${VAE_PREFIX}$1" out="${OUT_PREFIX}_${VAE_PREFIX}$1.csv"
   if [ "$PIPELINE" = combined ]; then
     CMD=( eval_label_efficiency.py --vae_dirs "$dir" --output "$out" --gpu 0 )
+  elif [ "$PIPELINE" = homo ]; then
+    CMD=( eval_homo_label_efficiency.py --vae_dirs "$dir" --output "$out" --gpu 0 )
   else
     CMD=( eval_sean_label_efficiency_v4.py --vae_dirs "$dir" --output "$out" --gpu 0 )
     [ "$FLIP_SURPRISE" = 1 ] && CMD+=( --flip_surprise )
