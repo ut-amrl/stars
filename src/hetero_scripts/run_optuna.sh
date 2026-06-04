@@ -71,7 +71,17 @@ fi
 read -ra EXTRA_ARR <<< "$EXTRA"
 
 mkdir -p logs
-GPU_POOL="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
+if [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
+  if command -v nvidia-smi &> /dev/null; then
+    num_gpus=$(nvidia-smi -L | wc -l)
+  else
+    num_gpus=$(python -c "import torch; print(torch.cuda.device_count())" 2>/dev/null || echo 1)
+  fi
+  [ "$num_gpus" -ge 1 ] || num_gpus=1
+  GPU_POOL=$(seq -s, 0 $((num_gpus - 1)))
+else
+  GPU_POOL="$CUDA_VISIBLE_DEVICES"
+fi
 GPU_POOL="${GPU_POOL//,/ }"
 read -ra GPU_ARR <<< "$GPU_POOL"
 [ ${#GPU_ARR[@]} -gt 0 ] || { echo "ERROR: no GPUs given" >&2; exit 1; }

@@ -19,7 +19,15 @@ cd "$(dirname "$0")/.."
 
 CKPT_ROOT="${CKPT_ROOT:-experiments/snsb_supervised_v1_optuned}"
 N_RUNS="${N_RUNS:-10}"
-GPUS="${GPUS:-0}"
+if [ -z "${GPUS:-}" ]; then
+  if command -v nvidia-smi &> /dev/null; then
+    num_gpus=$(nvidia-smi -L | wc -l)
+  else
+    num_gpus=$(python -c "import torch; print(torch.cuda.device_count())" 2>/dev/null || echo 1)
+  fi
+  [ "$num_gpus" -ge 1 ] || num_gpus=1
+  GPUS=$(seq -s, 0 $((num_gpus - 1)))
+fi
 OUTPUT="${OUTPUT:-label_eff_supervised_snsb.csv}"
 N_SUBSET_SEEDS="${N_SUBSET_SEEDS:-10}"
 
