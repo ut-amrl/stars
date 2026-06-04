@@ -749,7 +749,7 @@ def main():
     parser.add_argument("--combined_h5",    default="dataloaders/combined_v1.h5")
     parser.add_argument("--snsb_h5",        default="dataloaders/social_nav_v3.h5")
     parser.add_argument("--oracle_h5",      default="dataloaders/socialnav_human_oracle_v3.h5",
-                        help="Oracle h5 for SNSB eval. Set to '' to use val set instead.")
+                        help="HDF5 for SNSB evaluation (human oracle labels)")
     parser.add_argument("--oracle_json_dir", default=None,
                         help="Optional JSON dir containing oracle action_probs for mandatory SNSB PA.")
     parser.add_argument("--output",         default=None)

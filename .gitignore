@@ -44,4 +44,5 @@ uv.lock
 
 *.log
 experiments/
+checkpoints/
 data/

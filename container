@@ -186,6 +186,7 @@ case "$(uname -s)" in
      MOUNT_DATA=${MOUNT_DATA//-v \/tmp\/.X11-unix:\/tmp\/.X11-unix/}
      ;;
    Linux)
+     HOST_FLAGS+=" --ipc=host"
      if [ "$IS_PODMAN" -eq 1 ]; then
        HOST_FLAGS+=" --security-opt=label=disable"
        if [ -d "/usr/share/containers/oci/hooks.d" ]; then

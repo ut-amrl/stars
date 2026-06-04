@@ -145,3 +145,4 @@ RUN pip3 install --no-cache-dir h5py wandb pytorch-ignite
 
 USER $username
 WORKDIR /home/$username
+RUN echo "cd ~/stars" >> /home/$username/.bash_profile
