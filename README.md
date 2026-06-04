@@ -180,9 +180,19 @@ Summarize the results:
 
 The homogeneous graph model uses config-driven training scripts. To train the homogeneous model:
 ```bash
-python train_hgnn_unified_v2.py --config config.yaml
+python train_hgnn_unified_v2.py --config params/config.yaml
 ```
-*(For HPC clusters, SLURM scripts like `scripts/tacc_train_*.sh` and `scripts/stampeded_train8seeds.sh` are provided at the root.)*
+Add `--ssub` to run in SSUB-only mode (no `valid_mask`, no node features).
+
+#### Config section to modify
+
+`train_hgnn_unified_v2.py` reads **only** the `homognn_params` section of [`params/config.yaml`](src/params/config.yaml); all other top-level sections (`vae`, `linear_probe`, `optuna_hgnn`, etc.) are ignored by this script. The key fields to set under `homognn_params`:
+
+- **`h5_path`** — the input graph dataset (HDF5) to train on.
+- **`experiments_root` / `run_name`** — output location for this run. The script creates `experiments_root/<timestamped run_name>/` and copies the resolved config into it; use a unique `run_name` so checkpoints aren't overwritten.
+- **`device`** — the GPU to train on (e.g. `cuda:0`), or `cpu`. One run uses a single GPU.
+- **`seed`** — vary this to produce the independent seeds for a multi-seed sweep.
+- **Architecture keys** (`hidden_dim`, `latent_dim`, `num_mp_layers`, `edge_transformer_layers`, `num_heads`, `dropout`) — define the encoder. If you later probe this checkpoint, the probe config's matching keys must be identical or weight loading will fail.
 
 ---
 
