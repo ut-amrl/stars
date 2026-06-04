@@ -48,6 +48,30 @@ PAPER_RESULTS = {
     }
 }
 
+# Standard deviations from Table 1 of the paper, used as cell-specific tolerances
+PAPER_STDS = {
+    "hetero": {
+        "sean": {
+            "f1_competence": {"0.01": 0.10, "0.05": 0.07, "0.10": 0.04, "0.25": 0.03, "0.50": 0.03, "1.00": 0.02},
+            "f1_surprise":   {"0.01": 0.17, "0.05": 0.17, "0.10": 0.15, "0.25": 0.12, "0.50": 0.08, "1.00": 0.04},
+            "f1_intention":  {"0.01": 0.08, "0.05": 0.05, "0.10": 0.04, "0.25": 0.03, "0.50": 0.03, "1.00": 0.03},
+        },
+        "snsb": {
+            "f1_macro":      {"0.01": 0.058, "0.05": 0.051, "0.10": 0.044, "0.25": 0.032, "0.50": 0.028, "1.00": 0.022},
+        }
+    },
+    "homo": {
+        "sean": {
+            "f1_competence": {"0.01": 0.14, "0.05": 0.08, "0.10": 0.05, "0.25": 0.04, "0.50": 0.03, "1.00": 0.02},
+            "f1_surprise":   {"0.01": 0.23, "0.05": 0.21, "0.10": 0.20, "0.25": 0.16, "0.50": 0.06, "1.00": 0.03},
+            "f1_intention":  {"0.01": 0.10, "0.05": 0.07, "0.10": 0.06, "0.25": 0.04, "0.50": 0.03, "1.00": 0.02},
+        },
+        "snsb": {
+            "f1_macro":      {"0.01": 0.05, "0.05": 0.045, "0.10": 0.035, "0.25": 0.03, "0.50": 0.024, "1.00": 0.02},
+        }
+    }
+}
+
 class TerminalColors:
     OKGREEN = '\033[92m'
     FAIL = '\033[91m'
@@ -118,10 +142,11 @@ def run_experiment(pipeline, is_fast):
     # Let's return the paths
     return "../experiments/summary_sean.csv", "../experiments/summary_snsb.csv"
 
-def compare_results(results, ground_truth, tolerance):
+def compare_results(results, ground_truth, stds, flat_tolerance=None):
     """Compare generated results against the paper's ground truth."""
     all_passed = True
-    print(f"\n{'-'*60}\nComparison Results (Tolerance: {tolerance})\n{'-'*60}")
+    tol_desc = f"flat tolerance of {flat_tolerance}" if flat_tolerance is not None else "paper standard deviations"
+    print(f"\n{'-'*60}\nComparison Results (Allowed diff based on {tol_desc})\n{'-'*60}")
     
     for task, task_metrics in ground_truth.items():
         if task not in results:
@@ -142,13 +167,18 @@ def compare_results(results, ground_truth, tolerance):
                 gen_val = results[task][metric][frac]
                 diff = abs(gen_val - paper_val)
                 
+                if flat_tolerance is not None:
+                    tolerance = flat_tolerance
+                else:
+                    tolerance = stds[task][metric][frac]
+                
                 if diff <= tolerance:
                     status = TerminalColors.OKGREEN + "[PASS]" + TerminalColors.ENDC
                 else:
                     status = TerminalColors.FAIL + "[FAIL]" + TerminalColors.ENDC
                     all_passed = False
                     
-                print(f"{status} {task.upper()} - {metric} @ {frac}: Paper={paper_val:.3f}, Generated={gen_val:.3f} (Diff={diff:.3f})")
+                print(f"{status} {task.upper()} - {metric} @ {frac}: Paper={paper_val:.3f}, Generated={gen_val:.3f} (Diff={diff:.3f}, Allowed={tolerance:.3f})")
                 
     return all_passed
 
@@ -160,7 +190,7 @@ def main():
     parser.add_argument("--fast", action="store_true", help="Run a fast, smaller sweep for debugging")
     parser.add_argument("--csv-sean", type=str, help="Path to precomputed SEAN summary CSV")
     parser.add_argument("--csv-sns", type=str, help="Path to precomputed SNS summary CSV")
-    parser.add_argument("--tolerance", type=float, default=0.05, help="Absolute tolerance for F1-score comparison")
+    parser.add_argument("--tolerance", type=float, default=None, help="Custom flat absolute tolerance for F1-score comparison (overrides paper standard deviations if set)")
     args = parser.parse_args()
 
     results_hetero = {}
@@ -184,11 +214,11 @@ def main():
             results["snsb"] = load_summary_csv(args.csv_sns)
         # Default to comparing against hetero if manual csv
         gt = PAPER_RESULTS["hetero"]
-        passed = compare_results(results, gt, args.tolerance)
+        passed = compare_results(results, gt, PAPER_STDS["hetero"], args.tolerance)
         if passed:
-            print(TerminalColors.OKGREEN + f"\n[SUCCESS] All checked metrics matched within {args.tolerance} tolerance." + TerminalColors.ENDC)
+            print(TerminalColors.OKGREEN + "\n[SUCCESS] All checked metrics matched within the allowed tolerance." + TerminalColors.ENDC)
         else:
-            print(TerminalColors.FAIL + f"\n[WARNING] Some metrics exceeded the {args.tolerance} tolerance." + TerminalColors.ENDC)
+            print(TerminalColors.FAIL + "\n[WARNING] Some metrics exceeded the allowed tolerance." + TerminalColors.ENDC)
         return
 
     all_passed = True
@@ -200,7 +230,7 @@ def main():
         results_hetero["snsb"] = load_summary_csv(sns_csv)
         
         gt = PAPER_RESULTS["hetero"]
-        passed = compare_results(results_hetero, gt, args.tolerance)
+        passed = compare_results(results_hetero, gt, PAPER_STDS["hetero"], args.tolerance)
         all_passed = all_passed and passed
 
     if run_homo_flag:
@@ -211,13 +241,13 @@ def main():
             results_homo["snsb"] = load_summary_csv(sns_csv)
         
         gt = PAPER_RESULTS["homo"]
-        passed = compare_results(results_homo, gt, args.tolerance)
+        passed = compare_results(results_homo, gt, PAPER_STDS["homo"], args.tolerance)
         all_passed = all_passed and passed
 
     if all_passed:
-        print(TerminalColors.OKGREEN + f"\n[SUCCESS] All checked metrics matched within {args.tolerance} tolerance." + TerminalColors.ENDC)
+        print(TerminalColors.OKGREEN + "\n[SUCCESS] All checked metrics matched within the allowed tolerance." + TerminalColors.ENDC)
     else:
-        print(TerminalColors.FAIL + f"\n[WARNING] Some metrics exceeded the {args.tolerance} tolerance." + TerminalColors.ENDC)
+        print(TerminalColors.FAIL + "\n[WARNING] Some metrics exceeded the allowed tolerance." + TerminalColors.ENDC)
 
 if __name__ == "__main__":
     main()
