@@ -13,15 +13,14 @@ Run this command block from the root of the repository to download all required 
 # 2. Build the Docker container environment
 ./container build
 
-# 3. Generate the required heterogeneous human oracle dataset
+# 3. Generate the required heterogeneous datasets
+# a) The training dataset (all scenes)
 ./container cmd 'cd src && python dataloaders/socialnav_to_hdf5_v3.py convert --train_dirs ../data/dataset_split/train/ssub ../data/dataset_split/val/ssub --no_synth --output ../data/social_nav_v3.h5'
+# b) The human oracle dataset for evaluation (validation scenes only)
+./container cmd "cd src && python dataloaders/socialnav_to_hdf5_v3.py convert --train_dir ../data/dataset_split/val/ssub --no_synth --output ../data/socialnav_human_oracle_v3.h5"
 
-
-# 4. Run all experiments and validate results (fast 1-seed sweep)
-./container cmd "python src/test_paper_results.py --run-all --fast"
-```
-
-*(Omit the `--fast` flag inside the container command if you wish to run the full 10-seed sweeps matching the paper setup.)*
+# 4. Run all experiments and validate results
+./container cmd "python src/test_paper_results.py --run-all"
 
 ---
 
