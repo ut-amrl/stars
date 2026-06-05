@@ -188,7 +188,7 @@ case "$(uname -s)" in
    Linux)
      HOST_FLAGS+=" --ipc=host"
      if [ "$IS_PODMAN" -eq 1 ]; then
-       HOST_FLAGS+=" --security-opt=label=disable"
+       HOST_FLAGS+=" --security-opt=label=disable --device nvidia.com/gpu=all"
        if [ -d "/usr/share/containers/oci/hooks.d" ]; then
          HOST_FLAGS+=" --hooks-dir=/usr/share/containers/oci/hooks.d"
        fi
