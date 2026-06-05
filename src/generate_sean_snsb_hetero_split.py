@@ -14,8 +14,8 @@ import h5py
 import numpy as np
 import torch
 
-COMBINED_H5   = "dataloaders/combined_v1.h5"
-SEAN_H5       = "dataloaders/sean_together_v2.h5"
+COMBINED_H5   = "/data/combined_v1.h5"
+SEAN_H5       = "/data/sean_together_v2.h5"
 OUT_PATH      = "checkpoints/split_indices_sean_snsb_hetero_v1.pt"
 VAL_RATIO     = 0.16
 TEST_RATIO    = 0.04

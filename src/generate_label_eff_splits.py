@@ -53,7 +53,7 @@ def scene_split(indices, scenes, val_ratio, test_ratio, seed):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--h5_path",  default="dataloaders/combined_v1.h5")
+    parser.add_argument("--h5_path",  default="/data/combined_v1.h5")
     parser.add_argument("--out_dir",  default="checkpoints/label_eff_splits")
     parser.add_argument("--n_seeds",  type=int, default=10)
     args = parser.parse_args()

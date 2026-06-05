@@ -196,10 +196,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt_dirs",    nargs="+", required=True,
                         help="Supervised checkpoint dirs (each has best_model.pt)")
-    parser.add_argument("--snsb_h5",     default="dataloaders/social_nav_v3.h5")
-    parser.add_argument("--combined_h5", default="dataloaders/combined_v1.h5")
+    parser.add_argument("--snsb_h5",     default="/data/social_nav_v3.h5")
+    parser.add_argument("--combined_h5", default="/data/combined_v1.h5")
     parser.add_argument("--split_file",  default="checkpoints/split_indices_final.pt")
-    parser.add_argument("--oracle_h5",   default="dataloaders/socialnav_human_oracle_v3.h5")
+    parser.add_argument("--oracle_h5",   default="/data/socialnav_human_oracle_v3.h5")
     parser.add_argument("--output",      default="label_eff_supervised_snsb.csv")
     parser.add_argument("--fractions",   nargs="+", type=float,
                         default=[0.01, 0.05, 0.10, 0.25, 0.50, 1.00])

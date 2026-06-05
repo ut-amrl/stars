@@ -587,10 +587,10 @@ def train(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--snsb_h5",     default="dataloaders/social_nav_v3.h5")
-    parser.add_argument("--combined_h5", default="dataloaders/combined_v1.h5")
+    parser.add_argument("--snsb_h5",     default="/data/social_nav_v3.h5")
+    parser.add_argument("--combined_h5", default="/data/combined_v1.h5")
     parser.add_argument("--split_file",  default="checkpoints/split_indices_final.pt")
-    parser.add_argument("--oracle_h5",   default="dataloaders/socialnav_human_oracle_v3.h5")
+    parser.add_argument("--oracle_h5",   default="/data/socialnav_human_oracle_v3.h5")
     parser.add_argument("--out_dir",     required=True)
     parser.add_argument("--seed",        type=int,   default=1)
     parser.add_argument("--epochs",      type=int,   default=1000)

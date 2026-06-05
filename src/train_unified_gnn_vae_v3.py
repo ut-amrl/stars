@@ -536,9 +536,9 @@ def train(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--h5_path",    default="dataloaders/combined_v1.h5",
+    parser.add_argument("--h5_path",    default="/data/combined_v1.h5",
                         help="SEAN source (combined_v1.h5)")
-    parser.add_argument("--snsb_h5_path", default="dataloaders/social_nav_v3.h5",
+    parser.add_argument("--snsb_h5_path", default="/data/social_nav_v3.h5",
                         help="SNSB source at native T=20 (social_nav_v3.h5)")
     parser.add_argument("--split_file", default="checkpoints/split_indices_final.pt")
     parser.add_argument("--checkpoint_dir", default="checkpoints")

@@ -30,17 +30,17 @@ metadata:
 
 paths:
   combined:
-    sean_h5: dataloaders/combined_v1.h5
-    snsb_h5: dataloaders/social_nav_v3.h5
-    snsb_oracle_h5: dataloaders/socialnav_human_oracle_v3.h5
+    sean_h5: /data/combined_v1.h5
+    snsb_h5: /data/social_nav_v3.h5
+    snsb_oracle_h5: /data/socialnav_human_oracle_v3.h5
     split_file: checkpoints/split_indices_final.pt
     default_checkpoint_root: checkpoints/v3_hetero_optuned128
     repro_checkpoint_root: checkpoints/repro_v3_hetero_optuned128
     checkpoint_name: best_unified_gnn_vae_v3_seednone.pt
     split_name: split_used_v3_seednone.pt
   sean_only:
-    h5_path: dataloaders/sean_together_v2.h5
-    combined_h5_for_scene_names: dataloaders/combined_v1.h5
+    h5_path: /data/sean_together_v2.h5
+    combined_h5_for_scene_names: /data/combined_v1.h5
     split_file: checkpoints/split_indices_final_sean_only.pt
     default_checkpoint_root: checkpoints/v4_sean_optuned128
     repro_checkpoint_root: checkpoints/repro_v4_sean_optuned128

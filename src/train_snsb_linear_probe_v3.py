@@ -623,7 +623,7 @@ def train(args):
     zero_node_features = ckpt.get("zero_node_features", True)
     snsb_timesteps = ckpt.get("snsb_timesteps", 20)
     snsb_edge_node_init = ckpt.get("snsb_edge_node_init", False)
-    h5_path = args.h5_path or ckpt.get("snsb_h5_path", "dataloaders/social_nav_v3.h5")
+    h5_path = args.h5_path or ckpt.get("snsb_h5_path", "/data/social_nav_v3.h5")
 
     # ---- Load dataset + split ----
     dataset = UnifiedSocialNavDataset(h5_path, zero_node_features=zero_node_features)

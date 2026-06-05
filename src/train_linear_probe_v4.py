@@ -938,7 +938,7 @@ if __name__ == "__main__":
                              "v3: split from split_indices_final_sean_only.pt (auto-detected).")
     parser.add_argument("--sean_split_file", default=None,
                         help="Override SEAN split .pt for --unified_checkpoint v3 path.")
-    parser.add_argument("--h5_path",        default="dataloaders/sean_together_v2.h5")
+    parser.add_argument("--h5_path",        default="/data/sean_together_v2.h5")
     parser.add_argument("--epochs",         type=int,   default=1000)
     parser.add_argument("--es_patience",    type=int,   default=20)
     parser.add_argument("--batch_size",     type=int,   default=64)

@@ -47,10 +47,10 @@ def build_model(checkpoint, device):
 
 
 def build_oracle_dataset(args):
-    snsb_h5 = args.get("snsb_h5", "dataloaders/social_nav_v3.h5")
-    combined_h5 = args.get("combined_h5", "dataloaders/combined_v1.h5")
+    snsb_h5 = args.get("snsb_h5", "/data/social_nav_v3.h5")
+    combined_h5 = args.get("combined_h5", "/data/combined_v1.h5")
     split_file = args.get("split_file", "checkpoints/split_indices_final.pt")
-    oracle_h5 = args.get("oracle_h5", "dataloaders/socialnav_human_oracle_v3.h5")
+    oracle_h5 = args.get("oracle_h5", "/data/socialnav_human_oracle_v3.h5")
 
     train_ds = UnifiedSocialNavDataset(h5_path=snsb_h5)
     train_idx, _, _ = _get_snsb_split_indices(combined_h5, split_file, train_ds)

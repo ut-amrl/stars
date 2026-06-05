@@ -304,7 +304,7 @@ def train(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--h5_path",        default="dataloaders/sean_together_v2.h5")
+    parser.add_argument("--h5_path",        default="/data/sean_together_v2.h5")
     parser.add_argument("--checkpoint_dir", default="checkpoints")
     parser.add_argument("--split_file",     default=None,
                         help="Path to a .pt file with pre-computed train/val/test index lists "

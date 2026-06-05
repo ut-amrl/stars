@@ -283,8 +283,8 @@ def process_vae_dir(vae_dir, args, device):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--vae_dirs", nargs="+", required=True)
-    parser.add_argument("--h5_path", default="dataloaders/sean_together_v2.h5")
-    parser.add_argument("--combined_h5", default="dataloaders/combined_v1.h5",
+    parser.add_argument("--h5_path", default="/data/sean_together_v2.h5")
+    parser.add_argument("--combined_h5", default="/data/combined_v1.h5",
                         help="Used only to map SEAN sample keys to scene IDs.")
     parser.add_argument("--checkpoint_name", default="best_gnn_vae_v4.pt")
     parser.add_argument("--output", default="sean_label_eff_v4.csv")

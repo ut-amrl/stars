@@ -9,7 +9,7 @@
 
 # ── GNN-VAE Stage 1 ──────────────────────────────────────────────────────────
 vae:
-  h5_path:           dataloaders/sean_graph_v4.h5  # graph-format HDF5 used by SEANGraphDatasetV4
+  h5_path:           /data/sean_graph_v4.h5  # graph-format HDF5 used by SEANGraphDatasetV4
   experiments_root:  experiments/gnn_vae_v5
   device:            auto                           # auto | cuda | cpu
   wandb:             false
@@ -35,7 +35,7 @@ vae:
 # ── Linear probe Stage 2 ─────────────────────────────────────────────────────
 linear_probe:
   checkpoint:        experiments/gnn_vae_v5/best_gnn_vae_v5.pt  # path to saved VAE checkpoint
-  h5_path:           dataloaders/sean_graph_v4.h5
+  h5_path:           /data/sean_graph_v4.h5
   experiments_root:  experiments/linear_probe_v5
   device:            auto
   wandb:             false
@@ -58,7 +58,7 @@ linear_probe:
 
 # ── RF split baseline ────────────────────────────────────────────────────────
 rf_split:
-  h5_path:             dataloaders/sean_together_v2.h5
+  h5_path:             /data/sean_together_v2.h5
   experiments_root:    experiments/rf_split
   wandb:               true
   wandb_project:       social_world_model
@@ -72,7 +72,7 @@ rf_split:
 eval_ssub:
   ae_checkpoint:           experiments/hgnn_combined_v8/20260515_143450_hgnn_combined_v8/best_model.pt
   probe_checkpoint:        experiments/linear_probe_combined_ssub_v8/20260515_193212_linear_probe_combined_ssub_v8/best_linear_probe.pt
-  eval_h5_path:            dataloaders/social_nav_eval_combined.h5
+  eval_h5_path:            /data/social_nav_eval_combined.h5
   device:                  cuda:7
   batch_size:              64
   num_workers:             4
@@ -87,7 +87,7 @@ eval_ssub:
 
 # ── Combined SEAN + SSUB HGNN self-supervised AE ─────────────────────────────
 homognn_params:
-  h5_path:                 dataloaders/combined_v3.h5
+  h5_path:                 /data/combined_v3.h5
   experiments_root:        experiments/SQM_1pct_RandomRuns
   run_name:                SQM_1pct_RandomRuns_0
   device:                  cuda:0
@@ -122,7 +122,7 @@ homognn_params:
 linear_probe_hgnn_params:
   checkpoint:               /home/rmaheshwari/social_world_model/social_world_model/src/experiments/optuna_v2_0009/best_model.pt
   split_indices_path:       /home/rmaheshwari/social_world_model/social_world_model/src/experiments/random_best_0/20260515_203854_random_best_0/split_indices.pt
-  h5_path:                  dataloaders/combined_v1.h5
+  h5_path:                  /data/combined_v1.h5
   experiments_root:         experiments/linear_probe_ssub_optuna_test
   run_name:                 linear_probe_ssub_optuna_test_v1
   device:                   cuda:0
@@ -152,7 +152,7 @@ linear_probe_hgnn_params:
   adaptive_warmup_epochs:   10
   adaptive_ramp_epochs:     100
   adaptive_max_alpha:       0.5
-  eval_h5_path:             dataloaders/social_nav_eval_combined.h5
+  eval_h5_path:             /data/social_nav_eval_combined.h5
 
 linear_probe_sean_params:
   checkpoint:               /home/rmaheshwari/social_world_model/social_world_model/src/experiments/randomb_best_9/20260516_091057_randomb_best_9/best_model.pt
@@ -228,9 +228,9 @@ optuna_hgnn:
 
 linear_probe_all_params:
   # Encoder checkpoint
-  checkpoint:               /scratch/swm/best_model_optuna.pt
-  split_indices_path:       /scratch/swm/split_indices_final.pt
-  h5_path:                  /scratch/swm/combined_v1.h5
+  checkpoint:               /data/best_model_optuna.pt
+  split_indices_path:       /data/split_indices_final.pt
+  h5_path:                  /data/combined_v1.h5
   
   # Architecture (must match checkpoint)
   hidden_dim:               256
@@ -255,7 +255,7 @@ linear_probe_all_params:
   # Tasks
   run_sean:                 true
   run_sns:                  true
-  sns_eval_h5_path:         /scratch/swm/social_nav_eval_combined.h5
+  sns_eval_h5_path:         /data/social_nav_eval_combined.h5
 
   
   # Logging

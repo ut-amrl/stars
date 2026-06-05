@@ -79,8 +79,8 @@ read -ra EXTRA_ARR <<< "$EXTRA"
 if [ "$PIPELINE" = combined ]; then
   : "${OUT_ROOT:=checkpoints/v3_hetero_optuned128}"
   BASE=( train_unified_gnn_vae_v3.py
-         --h5_path      dataloaders/combined_v1.h5
-         --snsb_h5_path dataloaders/social_nav_v3.h5
+         --h5_path      /data/combined_v1.h5
+         --snsb_h5_path /data/social_nav_v3.h5
          --split_file   ../data/split_indices_final.pt
          --seed none
          --weighted_sampling
@@ -89,7 +89,7 @@ if [ "$PIPELINE" = combined ]; then
 elif [ "$PIPELINE" = homo ]; then
   : "${OUT_ROOT:=checkpoints/hgnn_combined_v8}"
   BASE=( train_hgnn_unified_v2.py
-         --h5_path      dataloaders/combined_v1.h5
+         --h5_path      /data/combined_v1.h5
          --split_file   ../data/split_indices_final.pt
          --edge_transformer_layers 3 --num_heads 4
          --seed none
@@ -99,7 +99,7 @@ elif [ "$PIPELINE" = homo ]; then
 else
   : "${OUT_ROOT:=checkpoints/v4_sean_optuned128}"
   BASE=( train_gnn_vae_v4.py
-         --h5_path    dataloaders/sean_together_v2.h5
+         --h5_path    /data/sean_together_v2.h5
          --split_file checkpoints/split_indices_final_sean_only.pt
          --edge_transformer_layers 3 --edge_transformer_heads 4
          "${COMMON[@]}" )

@@ -363,7 +363,7 @@ def main():
     parser.add_argument('--probe_epochs', type=int,   default=1000)
     parser.add_argument('--hidden_dim',   type=int,   default=256)
     parser.add_argument('--latent_dim',   type=int,   default=128)
-    parser.add_argument('--h5_path',      default='dataloaders/sean_together_v2.h5')
+    parser.add_argument('--h5_path',      default='/data/sean_together_v2.h5')
     parser.add_argument('--flip_surprise', action='store_true')
     parser.add_argument('--out_json',     default='best_hyperparams_v4.json')
     args = parser.parse_args()

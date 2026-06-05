@@ -34,10 +34,10 @@ if [ -z "${GPUS:-}" ]; then
   [ "$num_gpus" -ge 1 ] || num_gpus=1
   GPUS=$(seq -s, 0 $((num_gpus - 1)))
 fi
-SNSB_H5="${SNSB_H5:-dataloaders/social_nav_v3.h5}"
-COMBINED_H5="${COMBINED_H5:-dataloaders/combined_v1.h5}"
+SNSB_H5="${SNSB_H5:-/data/social_nav_v3.h5}"
+COMBINED_H5="${COMBINED_H5:-/data/combined_v1.h5}"
 SPLIT_FILE="${SPLIT_FILE:-checkpoints/split_indices_final.pt}"
-ORACLE_H5="${ORACLE_H5:-dataloaders/socialnav_human_oracle_v3.h5}"
+ORACLE_H5="${ORACLE_H5:-/data/socialnav_human_oracle_v3.h5}"
 OUT_ROOT="${OUT_ROOT:-experiments/snsb_supervised_v1}"
 EPOCHS="${EPOCHS:-1000}"
 BATCH_SIZE="${BATCH_SIZE:-32}"
