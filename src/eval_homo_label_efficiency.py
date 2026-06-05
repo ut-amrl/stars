@@ -218,7 +218,7 @@ def extract_snsb_embeddings(model, loader, device, ablation=None):
 
 @torch.no_grad()
 def extract_oracle_embeddings(model, oracle_h5, ckpt, device, batch_size=128, action_probs_json_dir=None, ablation=None, ssub=False):
-    target_t = ckpt["args"].get("snsb_timesteps", 20)
+    target_t = ckpt["args"].get("snsb_timesteps", 40)
     oracle_ds = load_oracle_eval_dataset_v3(
         oracle_h5, ckpt, action_probs_json_dir=action_probs_json_dir, target_t=target_t
     )
@@ -639,7 +639,7 @@ def process_vae_dir(vae_dir, args, device):
         
         # Checkpoint properties for oracle dataset
         zero_node_features = ckpt.get("zero_node_features", True)
-        snsb_timesteps = ckpt.get("snsb_timesteps", 20)
+        snsb_timesteps = ckpt.get("snsb_timesteps", 40)
         
         # We need to make sure we set robot_mean/robot_std/bystander_mean/bystander_std to match the format of load_oracle_eval_dataset_v3
         if "robot_mean" in ckpt:

@@ -298,12 +298,20 @@ dockerstop() {
   fi
 }
 dockershell() {
-  docker exec -it $RUNNING_CONTAINER $EXEC
+  local env_opts=""
+  if [[ ! -z "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+    env_opts="-e CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+  fi
+  docker exec $env_opts -it $RUNNING_CONTAINER $EXEC
 }
 dockercmd() {
   RUNNING_CONTAINER=$(docker container ls -q --filter name=$CONTAINER_NAME)
   local repo_dir="/home/$_UNAME/$(basename -- $ROOT)"
-  docker exec -it $RUNNING_CONTAINER /bin/bash -l -c "cd $repo_dir && $@"
+  local env_opts=""
+  if [[ ! -z "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+    env_opts="-e CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+  fi
+  docker exec $env_opts -it $RUNNING_CONTAINER /bin/bash -l -c "cd $repo_dir && $@"
 }
 
 case $DOCKER_COMMAND in
