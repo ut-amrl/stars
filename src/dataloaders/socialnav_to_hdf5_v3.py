@@ -143,13 +143,19 @@ def build_action_targets(data, people_ids):
     return action_label, action_probs
 
 
-def convert(train_dir, output_path, synth_dir=None):
+def convert(train_dirs, output_path, synth_dir=None):
     episodes = []
 
-    scene_dirs = sorted(
-        path for path in glob.glob(os.path.join(train_dir, "*"))
-        if os.path.isdir(path)
-    )
+    if isinstance(train_dirs, str):
+        train_dirs = [train_dirs]
+
+    scene_dirs = []
+    for d in train_dirs:
+        scene_dirs.extend(
+            path for path in glob.glob(os.path.join(d, "*"))
+            if os.path.isdir(path)
+        )
+    scene_dirs = sorted(scene_dirs)
     print(f"Found {len(scene_dirs)} real scene directories")
     for scene_dir in scene_dirs:
         for jf in sorted(glob.glob(os.path.join(scene_dir, "*.json"))):
@@ -237,8 +243,15 @@ def convert(train_dir, output_path, synth_dir=None):
     print(f"Saved to: {output_path}")
 
 
-def stats(train_dir, synth_dir=None):
-    json_files = sorted(glob.glob(os.path.join(train_dir, "*", "*.json")))
+def stats(train_dirs, synth_dir=None):
+    if isinstance(train_dirs, str):
+        train_dirs = [train_dirs]
+        
+    json_files = []
+    for d in train_dirs:
+        json_files.extend(glob.glob(os.path.join(d, "*", "*.json")))
+    json_files = sorted(json_files)
+    
     if synth_dir is not None:
         json_files += sorted(glob.glob(os.path.join(synth_dir, "*.json")))
 
@@ -261,22 +274,22 @@ if __name__ == "__main__":
     sub = parser.add_subparsers(dest="cmd")
 
     p_convert = sub.add_parser("convert")
-    p_convert.add_argument("--train_dir", default="train3")
+    p_convert.add_argument("--train_dirs", nargs='+', default=["train3"])
     p_convert.add_argument("--synth_dir", default="synthetic_dataset2")
     p_convert.add_argument("--no_synth", action="store_true",
-                           help="Only convert --train_dir; ignore --synth_dir.")
+                           help="Only convert --train_dirs; ignore --synth_dir.")
     p_convert.add_argument("--output", default="socialnav_v3.h5")
 
     p_stats = sub.add_parser("stats")
-    p_stats.add_argument("--train_dir", default="train3")
+    p_stats.add_argument("--train_dirs", nargs='+', default=["train3"])
     p_stats.add_argument("--synth_dir", default="synthetic_dataset2")
     p_stats.add_argument("--no_synth", action="store_true",
-                         help="Only inspect --train_dir; ignore --synth_dir.")
+                         help="Only inspect --train_dirs; ignore --synth_dir.")
 
     args = parser.parse_args()
     if args.cmd == "stats":
-        stats(args.train_dir, synth_dir=None if args.no_synth else args.synth_dir)
+        stats(args.train_dirs, synth_dir=None if args.no_synth else args.synth_dir)
     elif args.cmd == "convert":
-        convert(args.train_dir, args.output, synth_dir=None if args.no_synth else args.synth_dir)
+        convert(args.train_dirs, args.output, synth_dir=None if args.no_synth else args.synth_dir)
     else:
-        convert("train3", "socialnav_v3.h5", synth_dir="synthetic_dataset2")
+        convert(["train3"], "socialnav_v3.h5", synth_dir="synthetic_dataset2")

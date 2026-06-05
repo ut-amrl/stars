@@ -81,7 +81,7 @@ if [ "$PIPELINE" = combined ]; then
   BASE=( train_unified_gnn_vae_v3.py
          --h5_path      dataloaders/combined_v1.h5
          --snsb_h5_path dataloaders/social_nav_v3.h5
-         --split_file   checkpoints/split_indices_final.pt
+         --split_file   ../data/split_indices_final.pt
          --seed none
          --weighted_sampling
          --adaptive_warmup_epochs 20 --adaptive_max_alpha 0.75 --adaptive_ramp_epochs 100
@@ -90,7 +90,7 @@ elif [ "$PIPELINE" = homo ]; then
   : "${OUT_ROOT:=checkpoints/hgnn_combined_v8}"
   BASE=( train_hgnn_unified_v2.py
          --h5_path      dataloaders/combined_v1.h5
-         --split_file   checkpoints/split_indices_final.pt
+         --split_file   ../data/split_indices_final.pt
          --edge_transformer_layers 3 --num_heads 4
          --seed none
          --weighted_sampling
