@@ -102,6 +102,12 @@ def hetero_to_homo(hdata, ssub=False):
     if valid_mask is not None:
         data.valid_mask = valid_mask
         
+    if hasattr(hdata["bystander"], "action_probs") and hdata["bystander"].action_probs is not None:
+        num_classes = hdata["bystander"].action_probs.shape[1]
+        action_probs = torch.zeros((n_total, num_classes), dtype=hdata["bystander"].action_probs.dtype)
+        action_probs[n_robot:] = hdata["bystander"].action_probs
+        data.action_probs = action_probs
+        
     if hasattr(hdata, "scene"):
         data.scene = hdata.scene
     return data

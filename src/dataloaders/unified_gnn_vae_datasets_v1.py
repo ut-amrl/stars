@@ -256,30 +256,27 @@ class UnifiedSocialNavDataset(Dataset):
     def get(self, idx):
         source = self.base_dataset[idx]
         timesteps = _infer_timesteps(source, fallback=int(source.num_timesteps))
-        if timesteps != SNSB_TIMESTEPS:
-            raise ValueError(
-                f"UnifiedSocialNavDataset expected T={SNSB_TIMESTEPS} for UnifiedGNNVAE v1, "
-                f"got T={timesteps}. The human_oracle T=10 HDF5 is probe/eval-only unless "
-                "you train a T=10 model variant."
-            )
 
         data = HeteroData()
-        robot_x = source["robot"].x  # [1, 60] — trajectory only, no goal_position
-        if robot_x.shape[-1] != SNSB_ROBOT_DIM:
+        robot_x = source["robot"].x
+        expected_robot_dim = timesteps * 3
+        if robot_x.shape[-1] != expected_robot_dim:
             raise ValueError(
-                f"UnifiedSocialNavDataset expected robot.x dim={SNSB_ROBOT_DIM}, "
+                f"UnifiedSocialNavDataset expected robot.x dim={expected_robot_dim}, "
                 f"got {robot_x.shape[-1]}."
             )
-        data["robot"].x = torch.zeros(robot_x.shape[0], SNSB_ROBOT_DIM) if self.zero_node_features else self._normalize_robot(robot_x)
+        data["robot"].x = torch.zeros(robot_x.shape[0], expected_robot_dim) if self.zero_node_features else self._normalize_robot(robot_x)
         data["robot"].traj = source["robot"].traj
 
         if self.zero_node_features:
-            data["bystander"].x = torch.zeros(source["human"].x.shape[0], SNSB_BYSTANDER_DIM)
+            expected_bystander_dim = timesteps * 3
+            data["bystander"].x = torch.zeros(source["human"].x.shape[0], expected_bystander_dim)
         else:
             data["bystander"].x = self._normalize_bystander(source["human"].x)
-        if data["bystander"].x.shape[-1] != SNSB_BYSTANDER_DIM:
+        expected_bystander_dim = timesteps * 3
+        if data["bystander"].x.shape[-1] != expected_bystander_dim:
             raise ValueError(
-                f"UnifiedSocialNavDataset expected bystander.x dim={SNSB_BYSTANDER_DIM}, "
+                f"UnifiedSocialNavDataset expected bystander.x dim={expected_bystander_dim}, "
                 f"got {data['bystander'].x.shape[-1]}."
             )
         data["bystander"].traj = source["human"].traj

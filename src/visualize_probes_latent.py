@@ -1,7 +1,8 @@
 """
 Visualization of Latent Spaces via t-SNE and PCA.
 
-Extracts test-split latent representations from three downstream tasks:
+Extracts test-split latent representations from downstream tasks:
+1. SEAN-T (graph-level VAE embeddings)
 2. SNS (human node-level VAE embeddings, 128D)
 
 Performs dimensionality reduction to 2D using:
@@ -30,25 +31,10 @@ from types import SimpleNamespace
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(SRC_DIR)
 
-# Add group_gnn to path
-_possible_group_gnn_dirs = [
-    os.path.abspath(os.path.join(SRC_DIR, "..", "..", "group_gnn")),
-    os.path.abspath(os.path.join(SRC_DIR, "..", "..", "..", "group_gnn")),
-    "/home/ntsoi/all_swm/group_gnn"
-]
-GROUP_GNN_DIR = None
-for _d in _possible_group_gnn_dirs:
-    if os.path.exists(_d):
-        GROUP_GNN_DIR = _d
-        sys.path.append(_d)
-        break
-
-from dataloaders.unified_graph_dataset_v1 import UnifiedGraphDataset
+from dataloaders.unified_graph_dataset_v1 import UnifiedGraphDataset, DATASET_SEAN
 from probes.common import load_frozen_encoder, resolve_device, seed_everything
 from probes.sns_probe import ACTION_CLASSES, IGNORE_LABEL
-    extract_vae_edge_features,
-    y_to_A
-)
+from probes.sean_probe import extract_embeddings as extract_sean_embeddings, LABEL_NAMES
 
 # Set premium styling
 plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
@@ -313,59 +299,7 @@ def main():
         out_comb = os.path.join(output_dir, f"sean_combined_{method}.png")
         plot_combined_sean(z_2d_sean, y_sean, method, out_comb)
 
-    # ─── NEW EXPERIMENT: SEAN-T Robot Node-level Latent Space ───
-    print("\n" + "=" * 60)
-    print("SEAN-T ROBOT NODE LATENT VISUALIZATION")
-    print("=" * 60)
-    
-    z_sean_robot, y_sean_robot = extract_sean_robot_embeddings(
-        encoder, sean_loader, device
-    )
-    print(f"SEAN-T robot node embeddings shape: {z_sean_robot.shape}")
-    
-    for method in ["tsne", "pca"]:
-        z_2d_sean_robot = reduce_dimensions(z_sean_robot, method, random_state=seed)
-        
-        # Individual plots
-        for d, name in enumerate(LABEL_NAMES):
-            out_fn = os.path.join(output_dir, f"sean_robot_node_{name}_{method}.png")
-            plot_binary_latent(
-                z_2d_sean_robot, y_sean_robot[:, d],
-                f"SEAN-T Robot Node {name.capitalize()} Latent Space ({method.upper()})",
-                ["Low / Inactive", "High / Active"],
-                out_fn
-            )
-            
-        # Combined plot
-        out_comb = os.path.join(output_dir, f"sean_robot_node_combined_{method}.png")
-        plot_combined_sean(z_2d_sean_robot, y_sean_robot, method, out_comb)
 
-    # ─── NEW EXPERIMENT: SEAN-T Follower Node-level Latent Space ───
-    print("\n" + "=" * 60)
-    print("SEAN-T FOLLOWER NODE LATENT VISUALIZATION")
-    print("=" * 60)
-    
-    z_sean_follower, y_sean_follower = extract_sean_follower_embeddings(
-        encoder, sean_loader, device
-    )
-    print(f"SEAN-T follower node embeddings shape: {z_sean_follower.shape}")
-    
-    for method in ["tsne", "pca"]:
-        z_2d_sean_follower = reduce_dimensions(z_sean_follower, method, random_state=seed)
-        
-        # Individual plots
-        for d, name in enumerate(LABEL_NAMES):
-            out_fn = os.path.join(output_dir, f"sean_follower_node_{name}_{method}.png")
-            plot_binary_latent(
-                z_2d_sean_follower, y_sean_follower[:, d],
-                f"SEAN-T Follower Node {name.capitalize()} Latent Space ({method.upper()})",
-                ["Low / Inactive", "High / Active"],
-                out_fn
-            )
-            
-        # Combined plot
-        out_comb = os.path.join(output_dir, f"sean_follower_node_combined_{method}.png")
-        plot_combined_sean(z_2d_sean_follower, y_sean_follower, method, out_comb)
 
     # ─── EXPERIMENT 3 & 4: SNS (Node Action Latent Space) ───
     print("\n" + "=" * 60)
@@ -429,107 +363,6 @@ def main():
             f"SNS Human Action Latent Space Combined ({method.upper()})",
             out_comb
         )
-
-    # ─── EXPERIMENT 5 & 6: Cocktail Party (Edge Detection Latent Space) ───
-    print("\n" + "=" * 60)
-    print("COCKTAIL PARTY EDGE LATENT VISUALIZATION")
-    print("=" * 60)
-    
-    cp_dataset, cp_loaders = get_cocktail_loaders(
-        args.cocktail_party_root, min(16, int(args.batch_size)), device, use_gnn_transforms=True
-    )
-    
-    if cmd_args.split == "all":
-        # Extract Option B (VAE Edge Latents) for all loaders and concatenate
-        print("\nExtracting Option B (VAE Edge Latents 64D) representations for all splits...")
-        z_cp_b_list, y_cp_b_list = [], []
-        z_cp_a_list, y_cp_a_list = [], []
-        for s in ["train", "val", "test"]:
-            zb, yb = extract_cocktail_party_embeddings(encoder, cp_loaders[s], device, option_a=False)
-            za, ya = extract_cocktail_party_embeddings(None, cp_loaders[s], device, option_a=True)
-            z_cp_b_list.append(zb)
-            y_cp_b_list.append(yb)
-            z_cp_a_list.append(za)
-            y_cp_a_list.append(ya)
-        z_cp_b = np.concatenate(z_cp_b_list, axis=0)
-        y_cp_b = np.concatenate(y_cp_b_list, axis=0)
-        z_cp_a = np.concatenate(z_cp_a_list, axis=0)
-        y_cp_a = np.concatenate(y_cp_a_list, axis=0)
-    else:
-        # Extract Option B (VAE Edge Latents) for specified split
-        split_name = cmd_args.split
-        print(f"\nExtracting Option B (VAE Edge Latents 64D) representations for split '{split_name}'...")
-        z_cp_b, y_cp_b = extract_cocktail_party_embeddings(encoder, cp_loaders[split_name], device, option_a=False)
-        print(f"\nExtracting Option A (Raw Edge PPF 4D) representations for split '{split_name}'...")
-        z_cp_a, y_cp_a = extract_cocktail_party_embeddings(None, cp_loaders[split_name], device, option_a=True)
-
-    print(f"Cocktail Party Option B embeddings shape: {z_cp_b.shape}")
-    print(f"Cocktail Party Option A embeddings shape: {z_cp_a.shape}")
-    
-    # Subsample Cocktail Party to at most 5000 samples for fast and clean t-SNE / PCA visualization
-    max_samples = 5000
-    if z_cp_b.shape[0] > max_samples:
-        print(f"\nSubsampling Cocktail Party samples from {z_cp_b.shape[0]} to {max_samples} for clean & fast visualization...")
-        rng = np.random.default_rng(seed)
-        indices = rng.choice(z_cp_b.shape[0], max_samples, replace=False)
-        z_cp_b = z_cp_b[indices]
-        y_cp_b = y_cp_b[indices]
-        z_cp_a = z_cp_a[indices]
-        y_cp_a = y_cp_a[indices]
-        print(f"Subsampled Cocktail Party Option B embeddings shape: {z_cp_b.shape}")
-        print(f"Subsampled Cocktail Party Option A embeddings shape: {z_cp_a.shape}")
-    
-    for method in ["tsne", "pca"]:
-        # Option B (VAE Latents)
-        z_2d_cp_b = reduce_dimensions(z_cp_b, method, random_state=seed)
-        out_fn_b = os.path.join(output_dir, f"cocktail_party_vae_{method}.png")
-        plot_binary_latent(
-            z_2d_cp_b, y_cp_b,
-            f"Cocktail Party VAE Edge Latents ({method.upper()})",
-            ["Different Group", "Same Group"],
-            out_fn_b,
-            colors=['#64748b', '#10b981']  # Slate vs Emerald
-        )
-        
-        # Option A (Raw Edge PPF)
-        z_2d_cp_a = reduce_dimensions(z_cp_a, method, random_state=seed)
-        out_fn_a = os.path.join(output_dir, f"cocktail_party_raw_{method}.png")
-        plot_binary_latent(
-            z_2d_cp_a, y_cp_a,
-            f"Cocktail Party Raw Edge PPF Features ({method.upper()})",
-            ["Different Group", "Same Group"],
-            out_fn_a,
-            colors=['#64748b', '#f59e0b']  # Slate vs Amber
-        )
-        
-        # Combined plot per method showing Option A next to Option B
-        fig, axes = plt.subplots(1, 2, figsize=(15, 6.5))
-        colors_a = ['#64748b', '#f59e0b']
-        colors_b = ['#64748b', '#10b981']
-        
-        # Option A Plot
-        for val, color, lbl in [(0, colors_a[0], "Diff Group"), (1, colors_a[1], "Same Group")]:
-            mask = (y_cp_a == val)
-            axes[0].scatter(z_2d_cp_a[mask, 0], z_2d_cp_a[mask, 1], c=color, label=lbl, alpha=0.5, s=15, edgecolors='none')
-        axes[0].set_title("Option A: Raw Edge PPF Features", fontsize=12, fontweight='bold', pad=10)
-        axes[0].legend(markerscale=2, fontsize=9)
-        axes[0].set_xticks([]); axes[0].set_yticks([])
-        axes[0].spines['top'].set_visible(False); axes[0].spines['right'].set_visible(False)
-        axes[0].spines['left'].set_color('#cbd5e1'); axes[0].spines['bottom'].set_color('#cbd5e1')
-        
-        # Option B Plot
-        for val, color, lbl in [(0, colors_b[0], "Diff Group"), (1, colors_b[1], "Same Group")]:
-            mask = (y_cp_b == val)
-            axes[1].scatter(z_2d_cp_b[mask, 0], z_2d_cp_b[mask, 1], c=color, label=lbl, alpha=0.5, s=15, edgecolors='none')
-        axes[1].set_title("Option B: VAE Latent Spaces", fontsize=12, fontweight='bold', pad=10)
-        axes[1].legend(markerscale=2, fontsize=9)
-        axes[1].set_xticks([]); axes[1].set_yticks([])
-        axes[1].spines['top'].set_visible(False); axes[1].spines['right'].set_visible(False)
-        axes[1].spines['left'].set_color('#cbd5e1'); axes[1].spines['bottom'].set_color('#cbd5e1')
-        
-        fig.suptitle(f"Cocktail Party Edge Dimensionality Reduction ({method.upper()})", fontsize=15, fontweight='bold', y=0.98, color='#0f172a')
-        out_comb = os.path.join(output_dir, f"cocktail_party_combined_{method}.png")
-        save_and_clear_plot(out_comb)
 
     print("\n" + "=" * 60)
     print("ALL VISUALIZATIONS GENERATED SUCCESSFULLY")

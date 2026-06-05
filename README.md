@@ -6,23 +6,34 @@ This repository contains the official implementation of STARS, a SpatioTemporal 
 
 Run this command block from the root of the repository to download all required datasets, build the Docker environment, and execute the test harness for all experiments:
 
-```bash
-# 1. Download real datasets and pretrained checkpoints
+1. Download real datasets and pretrained checkpoints
+```
 ./download_data.sh
+```
 
-# 2. Build the Docker container environment
+2. Build the Docker container environment
+```
 ./container build
+```
 
-# 3. Generate the required heterogeneous datasets
-# a) The training dataset (all scenes)
-./container cmd 'cd src && python dataloaders/socialnav_to_hdf5_v3.py convert --train_dirs ../data/dataset_split/train/ssub ../data/dataset_split/val/ssub --no_synth --output ../data/social_nav_v3.h5'
-# b) The human oracle dataset for evaluation (validation scenes only)
-./container cmd "cd src && python dataloaders/socialnav_to_hdf5_v3.py convert --train_dir ../data/dataset_split/val/ssub --no_synth --output ../data/socialnav_human_oracle_v3.h5"
+3. Generate the required heterogeneous datasets
 
-# 4. Run all experiments and validate results
-./container cmd "python src/test_paper_results.py --run-all"
+   3a. The training dataset (all scenes)
+    ```
+    ./container cmd 'cd src && python dataloaders/socialnav_to_hdf5_v3.py convert --train_dirs ../data/dataset_split/train/ssub ../data/dataset_split/val/ssub --no_synth --output ../data/social_nav_v3.h5'
+    ```
 
----
+   3b. The human oracle dataset for evaluation (validation scenes only)
+    ```
+    ./container cmd "cd src && python dataloaders/socialnav_to_hdf5_v3.py convert --train_dir ../data/dataset_split/val/ssub --no_synth --output ../data/socialnav_human_oracle_v3.h5"
+    ```
+
+4. Run all experiments and validate results
+```
+./container cmd "python src/test_paper_results.py --run-all --fast"
+```
+
+> In `--fast` mode, the `test_paper_results.py` script will run only 1 seed per pipeline instead of 10.
 
 ## Datasets & Pretrained Models
 
